@@ -99,11 +99,14 @@ def main():
     outTFrecord = "output_TFRecord.tfrecords"
     outputPath = os.path.join(data_dir, outTFrecord)
     if os.path.exists(outputPath):
-        raise ValueError(
-            "ERROR: {} already exists. Delete this file or {TODO}.".format(
-                outputPath))
+        os.unlink(outputPath)  # Delete $outputPath this file
+        # raise ValueError(
+        #     "ERROR: {} already exists. Delete this file or {TODO}.".format(
+        #         outputPath))
     # TODO set some cover or judge or delete mechanism with $outputPath( this file )
-
+    output_file = tf.python_io.TFRecordWriter(outputPath)
+    for m, wave_file in enumerate(clean_list):
+        print("{} ---- {}".format(m, wave_file))
 
     print("Done!!")
 
