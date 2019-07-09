@@ -3,6 +3,7 @@ import time
 import argparse
 import numpy as np
 import shutil
+import tensorflow as tf
 
 parser = argparse.ArgumentParser(description='Spec Augment')
 parser.add_argument(
@@ -102,7 +103,7 @@ def main():
             "ERROR: {} already exists. Delete this file or {TODO}.".format(
                 outputPath))
     # TODO set some cover or judge or delete mechanism with $outputPath( this file )
-    
+
 
     print("Done!!")
 
