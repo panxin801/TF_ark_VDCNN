@@ -95,6 +95,15 @@ def main():
         if file.endswith(".txt")
     ]
 
+    outTFrecord = "output_TFRecord.tfrecords"
+    outputPath = os.path.join(data_dir, outTFrecord)
+    if os.path.exists(outputPath):
+        raise ValueError(
+            "ERROR: {} already exists. Delete this file or {TODO}.".format(
+                outputPath))
+    # TODO set some cover or judge or delete mechanism with $outputPath( this file )
+    
+
     print("Done!!")
 
 
