@@ -6,37 +6,75 @@ import shutil
 import tensorflow as tf
 
 
-def ReadARKFile(readFile):
+def findNoiseARK(tagid, noise_ARKID, noise_list):
     valueList = []
+    findHead = 0
+
+    for name in noise_list:
+        noise_list_id = name.split(".")[-2]
+        if noise_ARKID != noise_list_id:
+            continue
+        for line in open(name, "rt"):
+            if "{}  [".format(tagid) in line and findHead == 0:
+                findHead = 1
+            elif "]" in line and findHead == 1:
+                Tmpline = line.strip().split("]")[0]
+                Tmpline = Tmpline.strip().split(" ")
+                valueList.append(Tmpline)
+                feat_spectrogram = np.array(valueList, dtype=np.float32)
+                valueList.clear()
+                findHead = 0
+                return feat_spectrogram
+            elif findHead == 1:
+                Tmpline = line.strip()
+                valueList.append(Tmpline.split(" "))
+
+
+def _bytes_feature(value):
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+
+def encoder_proc(feat_spectrogram, noise_feat_spectrogram, output_file):
+    for (feat, noise_feat) in zip(feat_spectrogram, noise_feat_spectrogram):
+        feat_str = feat.tostring()
+        noise_feat_str = noise_feat.tostring()
+        example = tf.train.Example(
+            features=tf.train.Features(
+                feature={
+                    'wav_feat': _bytes_feature(feat_str),
+                    'noisy_feat': _bytes_feature(noise_feat_str)
+                }))
+        output_file.write(example.SerializeToString())
+
+
+def ReadARKFile(readFile, noise_feats_dict, noise_list, output_file):
+    valueList = []
+    noise_feat_spectrogram = []
     num = 0
+    findHead = 0
+    noise_ARKID = 0
+
     # ID of what started, and care about the bits
-    searchRetId = 0
     for line in open(readFile, "rt"):
-        if searchRetId == 0:
-            if "{}  [".format(retId) not in line:
-                continue
-            else:
-                searchRetId = 1
-        if "[" in line:
+        if "  [" in line and findHead == 0:
             tagid = line.split(" ")[0]
-            if (tagid < retId):
-                continue
-        elif "]" in line:
+            if tagid in noise_feats_dict:
+                noise_ARKID = noise_feats_dict[tagid]
+                noise_feat_spectrogram = findNoiseARK(tagid, noise_ARKID,
+                                                      noise_list)
+                findHead = 1
+        elif "]" in line and findHead == 1:
             Tmpline = line.strip().split("]")[0]
             Tmpline = Tmpline.strip().split(" ")
             valueList.append(Tmpline)
-            mel_spectrogram = np.array(valueList)
-            mel_spectrogram = mel_spectrogram.T
-            warped_masked_spectrogram = spec_augment_tensorflow.spec_augment(
-                mel_spectrogram=mel_spectrogram,
-                time_warping_para=5,
-                time_masking_para=15)
-
+            feat_spectrogram = np.array(valueList, dtype=np.float32)
+            encoder_proc(feat_spectrogram, noise_feat_spectrogram, output_file)
             valueList.clear()
             num += 1
             if (num % 500 == 0):
                 print(num)
-        else:
+            findHead = 0
+        elif findHead == 1:
             Tmpline = line.strip()
             valueList.append(Tmpline.split(" "))
 
@@ -74,7 +112,7 @@ def main():
     # TODO set some cover or judge or delete mechanism with $outputPath( this file )
     output_file = tf.python_io.TFRecordWriter(outputPath)
     for __, clean_ARK_file in enumerate(clean_list):
-        ReadARKFile(clean_ARK_file)
+        ReadARKFile(clean_ARK_file, noise_feats_dict, noise_list, output_file)
 
     output_file.close()
     print("Done!!")
