@@ -34,8 +34,38 @@ def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
+# FOr slice original wav signals into fixed block like (time,freq)=(11,43),
+# and then flatten the input. But if the shape of wav signals less then (time,freq), then padding with 0
+def slice_wav(input_signals, windows_size=11, freq_size=43, stride=1):
+    assert input_signals.shape[1] == freq_size
+    n_samples = input_signals.shape[0]
+    offset = int(stride * windows_size)
+    retSlice = []
+    for start in range(0, n_samples, offset):
+        # Less than 1 signal block
+        end = start + offset
+        if end > n_samples:
+            end = n_samples
+        oneSlice = input_signals[start:end]
+        if oneSlice.shape[0] == windows_size:
+            retSlice.append(oneSlice)
+        elif oneSlice.shape[0] < windows_size:
+            tmpFillZero = np.zeros(
+                [windows_size - oneSlice.shape[0], freq_size], np.float32)
+            oneSlice = np.concatenate((oneSlice, tmpFillZero))
+            retSlice.append(oneSlice)
+    return retSlice
+
+
 def encoder_proc(feat_spectrogram, noise_feat_spectrogram, output_file):
-    for (feat, noise_feat) in zip(feat_spectrogram, noise_feat_spectrogram):
+    sliced_feat_spectrogram = slice_wav(feat_spectrogram)
+    sliced_noise_feat_spectrogram = slice_wav(noise_feat_spectrogram)
+    # TODO
+    # 怎么把这里的len改成shape
+    assert len(sliced_feat_spectrogram) == len(
+        sliced_noise_feat_spectrogram), len(sliced_noise_feat_spectrogram)
+    # assert sliced_feat_spectrogram.shape == sliced_noise_feat_spectrogram.shape, sliced_noise_feat_spectrogram.shape
+    for (feat, noise_feat) in zip(sliced_feat_spectrogram, sliced_noise_feat_spectrogram):
         feat_str = feat.tostring()
         noise_feat_str = noise_feat.tostring()
         example = tf.train.Example(
