@@ -21,7 +21,7 @@ def findNoiseARK(tagid, noise_ARKID, noise_list):
                 Tmpline = line.strip().split("]")[0]
                 Tmpline = Tmpline.strip().split(" ")
                 valueList.append(Tmpline)
-                feat_spectrogram = np.array(valueList, dtype=np.float32)
+                feat_spectrogram = np.array(valueList, dtype=np.float16)
                 valueList.clear()
                 findHead = 0
                 return feat_spectrogram
@@ -51,30 +51,39 @@ def slice_wav(input_signals, windows_size=11, freq_size=43, stride=1):
             retSlice.append(oneSlice)
         elif oneSlice.shape[0] < windows_size:
             tmpFillZero = np.zeros(
-                [windows_size - oneSlice.shape[0], freq_size], np.float32)
+                [windows_size - oneSlice.shape[0], freq_size], np.float16)
             oneSlice = np.concatenate((oneSlice, tmpFillZero))
             retSlice.append(oneSlice)
-    return retSlice
+    return np.array(retSlice, np.float16)
 
 
 def encoder_proc(feat_spectrogram, noise_feat_spectrogram, output_file):
     sliced_feat_spectrogram = slice_wav(feat_spectrogram)
     sliced_noise_feat_spectrogram = slice_wav(noise_feat_spectrogram)
-    # TODO
-    # 怎么把这里的len改成shape
-    assert len(sliced_feat_spectrogram) == len(
-        sliced_noise_feat_spectrogram), len(sliced_noise_feat_spectrogram)
-    # assert sliced_feat_spectrogram.shape == sliced_noise_feat_spectrogram.shape, sliced_noise_feat_spectrogram.shape
-    for (feat, noise_feat) in zip(sliced_feat_spectrogram, sliced_noise_feat_spectrogram):
-        feat_str = feat.tostring()
-        noise_feat_str = noise_feat.tostring()
-        example = tf.train.Example(
-            features=tf.train.Features(
-                feature={
-                    'wav_feat': _bytes_feature(feat_str),
-                    'noisy_feat': _bytes_feature(noise_feat_str)
-                }))
-        output_file.write(example.SerializeToString())
+    assert sliced_feat_spectrogram.shape == sliced_noise_feat_spectrogram.shape, sliced_feat_spectrogram.shape
+    # for (feat, noise_feat) in zip(sliced_feat_spectrogram,
+    #                               sliced_noise_feat_spectrogram):
+    #     feat_str = feat.tostring()
+    #     noise_feat_str = noise_feat.tostring()
+    #     example = tf.train.Example(
+    #         features=tf.train.Features(
+    #             feature={
+    #                 'wav_feat': _bytes_feature(feat_str),
+    #                 'noisy_feat': _bytes_feature(noise_feat_str)
+    #             }))
+    #     output_file.write(example.SerializeToString())
+    
+    ## sliced_feat_spectrogram, sliced_noise_feat_spectrogram are sliced feats.
+    ## They are now feats block already with dims[window_num, time,freq]
+    feat_str = sliced_feat_spectrogram.tostring()
+    noise_feat_str = sliced_noise_feat_spectrogram.tostring()
+    example = tf.train.Example(
+        features=tf.train.Features(
+            feature={
+                'wav_feat': _bytes_feature(feat_str),
+                'noisy_feat': _bytes_feature(noise_feat_str)
+            }))
+    output_file.write(example.SerializeToString())
 
 
 def ReadARKFile(readFile, noise_feats_dict, noise_list, output_file):
@@ -97,7 +106,7 @@ def ReadARKFile(readFile, noise_feats_dict, noise_list, output_file):
             Tmpline = line.strip().split("]")[0]
             Tmpline = Tmpline.strip().split(" ")
             valueList.append(Tmpline)
-            feat_spectrogram = np.array(valueList, dtype=np.float32)
+            feat_spectrogram = np.array(valueList, dtype=np.float16)
             encoder_proc(feat_spectrogram, noise_feat_spectrogram, output_file)
             valueList.clear()
             num += 1

@@ -4,7 +4,8 @@ Using tensorflow and ARK files for VDCNN
 ## Dependicences
 This experiment is based on
 1. Python3.5.4 64bit
-2. Tensorflow-cpy version 1.9.0 AMD64
+2. Tensorflow-cpy version 1.9.0 AMD64 or
+   Tensorflow-gpu version 1.12.0 AMD64
 
 ## Pre-processing on feats.scp
 Original **feats.scp** stores the id-ark_file relationship. For now, I want to process the data as following steps:  
