@@ -1,5 +1,4 @@
 import os, sys
-import time
 import argparse
 import numpy as np
 import shutil
@@ -72,7 +71,7 @@ def encoder_proc(feat_spectrogram, noise_feat_spectrogram, output_file):
     #                 'noisy_feat': _bytes_feature(noise_feat_str)
     #             }))
     #     output_file.write(example.SerializeToString())
-    
+
     ## sliced_feat_spectrogram, sliced_noise_feat_spectrogram are sliced feats.
     ## They are now feats block already with dims[window_num, time,freq]
     feat_str = sliced_feat_spectrogram.tostring()
