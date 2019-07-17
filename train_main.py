@@ -3,6 +3,7 @@ import tensorflow as tf
 import numpy as np
 import argparse
 from tensorflow.python.client import device_lib
+from model import VDCNN
 devices = device_lib.list_local_devices()
 
 parser = argparse.ArgumentParser(description="read and train VDCNN")
@@ -11,6 +12,13 @@ parser.add_argument(
     type=str,
     default="output_TFRecord.tfrecords",
     help="Path and name of TFRecord file.")
+parser.add_argument(
+    "--downsampling-type",
+    type=str,
+    default="maxpool",
+    help=
+    "Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
+)
 args = parser.parse_args()
 
 
@@ -38,12 +46,18 @@ def read_and_decode(TFRecordqueue, context_window_size, feat_size):
 def main(_):
     # Set some Top params
     batchsize = 128
+    context_window_size = 11
+    feat_size = 43
+    depth = 9
+    use_he_uniform = True
+    optional_shortcut = False
     currentPath = os.path.dirname(os.path.abspath(__file__))
 
     TFRecord = os.path.join(currentPath, os.path.join("data", args.TFRecord))
     TFRecordqueue = tf.train.string_input_producer([TFRecord])
     clean_feats, noise_feats = read_and_decode(
-        TFRecordqueue, 11, 43)  # 11 means context window size
+        TFRecordqueue, context_window_size,
+        feat_size)  # 11 means context window size
     config = tf.ConfigProto()
     config.allow_soft_placement = True
     config.gpu_options.allow_growth = True
@@ -52,7 +66,13 @@ def main(_):
         if len(devices) > 1 and "CPU" in device:
             continue
         udevice.append(device)
-    
+    sess = tf.Session(config=config)
+    cnn_model = VDCNN(
+        num_classes=[context_window_size, feat_size],
+        depth=9,
+        downsampling_type=args.downsampling_type,
+        use_he_uniform=use_he_uniform,
+        optional_shortcut=optional_shortcut)
 
 
 if __name__ == "__main__":
