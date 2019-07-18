@@ -14,13 +14,18 @@ def Convolutional_Block(inputs, shortcut, num_filters, name, is_training):
     with tf.variable_scope("conv_block_" + str(num_filters) + "_" + name):
         for i in range(2):
             with tf.variable_scope("conv1d_%s" % str(i)):
-                filter_shape = [1, inputs.get_shape()[2], num_filters]
+                filter_shape = [
+                    1,
+                    inputs.get_shape()[2],
+                    input.get_shape()[3], num_filters
+                ]
                 W = tf.get_variable(
                     name='W',
                     shape=filter_shape,
                     initializer=he_normal,
                     regularizer=regularizer)
-                inputs = tf.nn.conv1d(inputs, W, stride=1, padding="SAME")
+                inputs = tf.nn.conv2d(
+                    inputs, W, strides=[1, 1, 1, 1], padding="SAME")
                 inputs = tf.layers.batch_normalization(
                     inputs=inputs,
                     momentum=0.997,
@@ -105,7 +110,6 @@ class VDCNN():
                  downsampling_type='maxpool',
                  use_he_uniform=True,
                  optional_shortcut=False):
-        print(input_dim)
 
         # Depth to No. Layers
         if depth == 9:
@@ -121,23 +125,24 @@ class VDCNN():
 
         # input tensors
         self.input_x = tf.placeholder(
-            tf.float32, [batchsize, input_dim[0], input_dim[1]],
+            tf.float32, [batchsize, input_dim[0], input_dim[1], 1],
             name="noise_feat")
         self.input_y = tf.placeholder(
-            tf.float32, [batchsize, input_dim[0], input_dim[1]],
+            tf.float32, [batchsize, input_dim[0], input_dim[1], 1],
             name="clean_feat")
         self.is_training = tf.placeholder(tf.bool)
         self.layers = []
 
         # First Conv Layer
         with tf.variable_scope("First_Conv"):
-            filter_shape = [1, 3, 64]
+            filter_shape = [1, 3, 1, 64]
             W = tf.get_variable(
                 name='W_1',
                 shape=filter_shape,
                 initializer=he_normal,
                 regularizer=regularizer)
-            inputs = tf.nn.conv1d(self.input_x, W, stride=1, padding="SAME")
+            inputs = tf.nn.conv2d(
+                self.input_x, W, strides=[1, 1, 1, 1], padding="SAME")
             #inputs = tf.nn.relu(inputs)
         print("First Conv", inputs.get_shape())
         self.layers.append(inputs)
