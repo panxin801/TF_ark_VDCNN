@@ -20,7 +20,7 @@ def findNoiseARK(tagid, noise_ARKID, noise_list):
                 Tmpline = line.strip().split("]")[0]
                 Tmpline = Tmpline.strip().split(" ")
                 valueList.append(Tmpline)
-                feat_spectrogram = np.array(valueList, dtype=np.float16)
+                feat_spectrogram = np.array(valueList, dtype=np.float32)
                 valueList.clear()
                 findHead = 0
                 return feat_spectrogram
@@ -50,10 +50,10 @@ def slice_wav(input_signals, windows_size=11, freq_size=43, stride=1):
             retSlice.append(oneSlice)
         elif oneSlice.shape[0] < windows_size:
             tmpFillZero = np.zeros(
-                [windows_size - oneSlice.shape[0], freq_size], np.float16)
+                [windows_size - oneSlice.shape[0], freq_size], np.float32)
             oneSlice = np.concatenate((oneSlice, tmpFillZero))
             retSlice.append(oneSlice)
-    return np.array(retSlice, np.float16)
+    return np.array(retSlice, np.float32)
 
 
 def encoder_proc(feat_spectrogram, noise_feat_spectrogram, output_file):
@@ -107,7 +107,7 @@ def ReadARKFile(readFile, noise_feats_dict, noise_list, output_file):
             Tmpline = line.strip().split("]")[0]
             Tmpline = Tmpline.strip().split(" ")
             valueList.append(Tmpline)
-            feat_spectrogram = np.array(valueList, dtype=np.float16)
+            feat_spectrogram = np.array(valueList, dtype=np.float32)
             encoder_proc(feat_spectrogram, noise_feat_spectrogram, output_file)
             valueList.clear()
             num += 1
