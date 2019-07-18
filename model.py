@@ -14,7 +14,7 @@ def Convolutional_Block(inputs, shortcut, num_filters, name, is_training):
     with tf.variable_scope("conv_block_" + str(num_filters) + "_" + name):
         for i in range(2):
             with tf.variable_scope("conv1d_%s" % str(i)):
-                filter_shape = [3, inputs.get_shape()[2], num_filters]
+                filter_shape = [1, inputs.get_shape()[2], num_filters]
                 W = tf.get_variable(
                     name='W',
                     shape=filter_shape,
@@ -94,16 +94,18 @@ def fixed_padding(inputs, kernel_size=3):
     return padded_inputs
 
 
+#  sequence_max_length=1024,
+#  embedding_size=16,
+#  num_quantized_chars=69,
 class VDCNN():
     def __init__(self,
-                 num_classes,
-                 sequence_max_length=1024,
-                 num_quantized_chars=69,
-                 embedding_size=16,
+                 input_dim,
+                 batchsize,
                  depth=9,
                  downsampling_type='maxpool',
                  use_he_uniform=True,
                  optional_shortcut=False):
+        print(input_dim)
 
         # Depth to No. Layers
         if depth == 9:
@@ -119,43 +121,25 @@ class VDCNN():
 
         # input tensors
         self.input_x = tf.placeholder(
-            tf.int32, [None, sequence_max_length], name="input_x")
+            tf.float16, [batchsize, input_dim[0], input_dim[1]],
+            name="noise_feat")
         self.input_y = tf.placeholder(
-            tf.float32, [None, num_classes], name="input_y")
+            tf.float16, [batchsize, input_dim[0], input_dim[1]],
+            name="clean_feat")
         self.is_training = tf.placeholder(tf.bool)
-
-        # Embedding Lookup 16
-        with tf.device('/cpu:0'), tf.name_scope("embedding"):
-            if use_he_uniform:
-                self.embedding_W = tf.get_variable(
-                    name='lookup_W',
-                    shape=[num_quantized_chars, embedding_size],
-                    initializer=tf.keras.initializers.he_uniform())
-            else:
-                self.embedding_W = tf.Variable(
-                    tf.random_uniform([num_quantized_chars, embedding_size],
-                                      -1.0, 1.0),
-                    name="embedding_W")
-            self.embedded_characters = tf.nn.embedding_lookup(
-                self.embedding_W, self.input_x)
-            print("-" * 20)
-            print("Embedded Lookup:", self.embedded_characters.get_shape())
-            print("-" * 20)
-
         self.layers = []
 
-        # Temp(First) Conv Layer
-        with tf.variable_scope("temp_conv") as scope:
-            filter_shape = [3, embedding_size, 64]
+        # First Conv Layer
+        with tf.variable_scope("First_Conv"):
+            filter_shape = [1, 3, 64]
             W = tf.get_variable(
                 name='W_1',
                 shape=filter_shape,
                 initializer=he_normal,
                 regularizer=regularizer)
-            inputs = tf.nn.conv1d(
-                self.embedded_characters, W, stride=1, padding="SAME")
+            inputs = tf.nn.conv1d(self.input_x, W, stride=1, padding="SAME")
             #inputs = tf.nn.relu(inputs)
-        print("Temp Conv", inputs.get_shape())
+        print("First Conv", inputs.get_shape())
         self.layers.append(inputs)
 
         # Conv Block 64
@@ -238,14 +222,22 @@ class VDCNN():
                 name=str(i + 1))
             self.layers.append(conv_block)
 
-        # Extract 8 most features as mentioned in paper
-        self.k_pooled = tf.nn.top_k(
-            tf.transpose(self.layers[-1], [0, 2, 1]),
-            k=8,
-            name='k_pool',
-            sorted=False)[0]
-        print("8-maxpooling:", self.k_pooled.get_shape())
-        self.flatten = tf.reshape(self.k_pooled, (-1, 512 * 8))
+        # Last pool and then flatten as a vector
+        # self.k_pooled = tf.nn.top_k(
+        #     tf.transpose(self.layers[-1], [0, 2, 1]),
+        #     k=8,
+        #     name='k_pool',
+        #     sorted=False)[0]
+        # print("8-maxpooling:", self.k_pooled.get_shape())
+        # self.flatten = tf.reshape(self.k_pooled, (-1, 512 * 8))
+
+        self.Last_pool = tf.layers.max_pooling1d(
+            inputs=self.layers[-1],
+            pool_size=2,
+            strides=2,
+            padding='same',
+            name="Last_pool")
+        self.flatten = tf.reshape(Last_pool, (batchsize, -1))
 
         # fc1
         with tf.variable_scope('fc1'):
@@ -269,14 +261,15 @@ class VDCNN():
             out = tf.matmul(self.fc1, w) + b
             self.fc2 = tf.nn.relu(out)
 
+        # TODO: modified the dimensions next lines
         # fc3
         with tf.variable_scope('fc3'):
             w = tf.get_variable(
-                'w', [self.fc2.get_shape()[1], num_classes],
+                'w', [self.fc2.get_shape()[1], input_dim],
                 initializer=he_normal,
                 regularizer=regularizer)
             b = tf.get_variable(
-                'b', [num_classes], initializer=tf.constant_initializer(1.0))
+                'b', [input_dim], initializer=tf.constant_initializer(1.0))
             self.fc3 = tf.matmul(self.fc2, w) + b
 
         # Calculate Mean cross-entropy loss

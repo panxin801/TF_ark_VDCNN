@@ -33,10 +33,10 @@ def read_and_decode(TFRecordqueue, context_window_size, feat_size):
         })
     # Check here http://osask.cn/front/ask/view/289151
     clean_feats = tf.decode_raw(features["wav_feat"],
-                                tf.half)  # tf.half===tf.float16
+                                tf.float16)  # tf.half===tf.float16
     clean_feats.set_shape([context_window_size * feat_size])
     sliced_feat = tf.reshape(clean_feats, [context_window_size, feat_size])
-    noise_feats = tf.decode_raw(features["noisy_feat"], tf.half)
+    noise_feats = tf.decode_raw(features["noisy_feat"], tf.float16)
     noise_feats.set_shape([context_window_size * feat_size])
     sliced_noise_feat = tf.reshape(noise_feats,
                                    [context_window_size, feat_size])
@@ -45,7 +45,7 @@ def read_and_decode(TFRecordqueue, context_window_size, feat_size):
 
 def main(_):
     # Set some Top params
-    batchsize = 128
+    batchsize = 32
     context_window_size = 11
     feat_size = 43
     depth = 9
@@ -68,7 +68,8 @@ def main(_):
         udevice.append(device)
     sess = tf.Session(config=config)
     cnn_model = VDCNN(
-        num_classes=[context_window_size, feat_size],
+        input_dim=[context_window_size, feat_size],
+        batchsize=batchsize,
         depth=9,
         downsampling_type=args.downsampling_type,
         use_he_uniform=use_he_uniform,
@@ -76,9 +77,10 @@ def main(_):
 
 
 if __name__ == "__main__":
-    try:
-        tf.app.run()
-    except Exception as e:
-        print("Error: ", e)
-    finally:
-        print("Done!")
+    # try:
+    #     tf.app.run()
+    # except Exception as e:
+    #     print("Error: ", e)
+    # finally:
+    #     print("Done!")
+    tf.app.run()
