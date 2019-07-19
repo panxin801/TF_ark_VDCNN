@@ -241,11 +241,11 @@ class VDCNN():
         # print("8-maxpooling:", self.k_pooled.get_shape())
         # self.flatten = tf.reshape(self.k_pooled, (-1, 512 * 8))
 
-        self.Last_pool = tf.layers.max_pooling1d(
-            inputs=self.layers[-1],
-            pool_size=2,
-            strides=2,
-            padding='same',
+        self.Last_pool = tf.nn.max_pool(
+            self.layers[-1],
+            ksize=[1, 1, 2, 1],
+            strides=[1, 1, 2, 1],
+            padding="SAME",
             name="Last_pool")
         self.flatten = tf.reshape(self.Last_pool, (batchsize, -1))
 
@@ -275,17 +275,18 @@ class VDCNN():
         # fc3
         with tf.variable_scope('fc3'):
             w = tf.get_variable(
-                'w', [self.fc2.get_shape()[1], input[0] * input[1]],
+                'w', [self.fc2.get_shape()[1], input_dim[0] * input_dim[1]],
                 initializer=he_normal,
                 regularizer=regularizer)
             b = tf.get_variable(
-                'b', [input[0] * input[1]],
+                'b', [input_dim[0] * input_dim[1]],
                 initializer=tf.constant_initializer(1.0))
             self.fc3 = tf.matmul(self.fc2, w) + b
 
         # Calculate Absolute error. I don't think Mean Cross-entropy works well
         with tf.name_scope("loss"):
-            self.predictions = tf.reshap(self.fc3, [-1, input[0], input[1]])
+            self.predictions = tf.reshape(self.fc3,
+                                          [-1, input_dim[0], input_dim[1], 1])
             losses = tf.losses.absolute_difference(self.input_y,
                                                    self.predictions)
             regularization_losses = tf.get_collection(

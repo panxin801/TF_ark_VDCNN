@@ -43,4 +43,5 @@ Data made of 2 parts. One is clean ark file and the other is noise ark file. The
 In **wav.scp** they must have the same id, which thet are in different save path and different ark files. The id will used as tag in TFrecord file.
 
 ## TODO works
-2. how to use tf.Dataset as input pipeline;
+1. how to use tf.Dataset as input pipeline;
+2. How to change tf.layers.conv2d change to tf.nn.max_pool;
