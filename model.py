@@ -17,7 +17,7 @@ def Convolutional_Block(inputs, shortcut, num_filters, name, is_training):
                 filter_shape = [
                     1,
                     inputs.get_shape()[2],
-                    input.get_shape()[3], num_filters
+                    inputs.get_shape()[3], num_filters
                 ]
                 W = tf.get_variable(
                     name='W',
@@ -67,8 +67,12 @@ def downsampling(inputs,
             use_bias=False)
     # Maxpooling
     else:
-        pool = tf.layers.max_pooling1d(
-            inputs=inputs, pool_size=3, strides=2, padding='same', name=name)
+        pool = tf.nn.max_pool(
+            inputs,
+            ksize=[1, 1, 3, 1],
+            strides=[1, 1, 2, 1],
+            padding='SAME',
+            name=name)
     if optional_shortcut:
         shortcut = tf.layers.conv1d(
             inputs=shortcut,
@@ -82,12 +86,12 @@ def downsampling(inputs,
         print("-" * 5)
         pool += shortcut
     pool = fixed_padding(inputs=pool)
-    return tf.layers.conv1d(
+    return tf.layers.conv2d(
         inputs=pool,
-        filters=pool.get_shape()[2] * 2,
+        filters=pool.get_shape()[3] * 2,
         kernel_size=1,
         strides=1,
-        padding='valid',
+        padding='VALID',
         use_bias=False)
 
 
@@ -95,7 +99,8 @@ def fixed_padding(inputs, kernel_size=3):
     pad_total = kernel_size - 1
     pad_beg = pad_total // 2
     pad_end = pad_total - pad_beg
-    padded_inputs = tf.pad(inputs, [[0, 0], [pad_beg, pad_end], [0, 0]])
+    padded_inputs = tf.pad(inputs,
+                           [[0, 0], [0, 0], [pad_beg, pad_end], [0, 0]])
     return padded_inputs
 
 
