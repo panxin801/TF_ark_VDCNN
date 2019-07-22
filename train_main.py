@@ -60,6 +60,13 @@ def main(_):
     clean_feats, noise_feats = read_and_decode(
         TFRecordqueue, context_window_size,
         feat_size)  # 11 means context window size
+    cleanbatch, noisebatch = tf.train.shuffle_batch(
+        [clean_feats, noise_feats],
+        batchsize,
+        num_threads=3,
+        capacity=500 + 3 * batchsize,
+        min_after_dequeue=200,
+        name="cleanbatch_and_noisebatch")
 
     config = tf.ConfigProto()
     config.allow_soft_placement = True
@@ -90,14 +97,23 @@ def main(_):
         gradients, _ = tf.clip_by_global_norm(gradients, 7.0)
         train_op = optimizer.apply_gradients(
             zip(gradients, variables), global_step=global_step)
+    print("Initializing all variables.")
     sess.run(tf.global_variables_initializer())
+    coord = tf.train.Coordinator()
+    threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+    print("sampling some wavs to store  sample references")
+    num_example = 0
+    for record in tf.python_io.tf_record_iterator(TFRecord):
+        num_example += 1
+    print("total examples in TFRecords {} : {}".format(TFRecord, num_example))
+    num_batchs = num_example / batchsize
 
 
 if __name__ == "__main__":
-    # try:
-    #     tf.app.run()
-    # except Exception as e:
-    #     print("Error: ", e)
-    # finally:
-    #     print("Done!")
-    tf.app.run()
+    try:
+        tf.app.run()
+    except Exception as e:
+        print("Error: ", e)
+    finally:
+        print("Done!")
+    # tf.app.run()
