@@ -20,34 +20,38 @@ parser.add_argument(
     "Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
 )
 args = parser.parse_args()
+# Set 2 global variables
+context_window_size = 11
+feat_size = 43
 
 
-def read_and_decode(TFRecordqueue, context_window_size, feat_size):
-    reader = tf.TFRecordReader()
-    _, serialized_example = reader.read(TFRecordqueue)
-    features = tf.parse_single_example(
-        serialized_example,
-        features={
-            "wav_feat": tf.FixedLenFeature([], tf.string),
-            "noisy_feat": tf.FixedLenFeature([], tf.string)
-        })
-    # Check here http://osask.cn/front/ask/view/289151
-    clean_feats = tf.decode_raw(features["wav_feat"],
-                                tf.float32)  # tf.half===tf.float16
-    clean_feats.set_shape([context_window_size * feat_size])
+def _parse_record(example_proto):
+    features = {
+        "wav_feat": tf.FixedLenFeature([], tf.string),
+        "noisy_feat": tf.FixedLenFeature([], tf.string)
+    }
+    parsed_features = tf.parse_single_example(example_proto, features=features)
+    clean_feats = tf.decode_raw(parsed_features["wav_feat"], tf.float32)
+    noise_feats = tf.decode_raw(parsed_features["noisy_feat"], tf.float32)
     sliced_feat = tf.reshape(clean_feats, [context_window_size, feat_size])
-    noise_feats = tf.decode_raw(features["noisy_feat"], tf.float32)
     noise_feats.set_shape([context_window_size * feat_size])
     sliced_noise_feat = tf.reshape(noise_feats,
                                    [context_window_size, feat_size])
     return sliced_feat, sliced_noise_feat
 
 
+def read_and_decode(TFRecord, context_window_size, feat_size):
+    dataset = tf.data.TFRecordDataset(TFRecord)
+    dataset = dataset.map(_parse_record)
+    return dataset
+
+
 def main(_):
     # Set some Top params
     batchsize = 32
-    context_window_size = 11
-    feat_size = 43
+    # context_window_size = 11
+    # feat_size = 43
+    ### Change the 2 params to global params
     depth = 9
     use_he_uniform = True
     optional_shortcut = False
@@ -56,24 +60,17 @@ def main(_):
     currentPath = os.path.dirname(os.path.abspath(__file__))
 
     TFRecord = os.path.join(currentPath, os.path.join("data", args.TFRecord))
-    TFRecordqueue = tf.train.string_input_producer([TFRecord])
-    clean_feats, noise_feats = read_and_decode(
-        TFRecordqueue, context_window_size,
-        feat_size)  # 11 means context window size
-    cleanbatch, noisebatch = tf.train.shuffle_batch(
-        [clean_feats, noise_feats],
-        batchsize,
-        num_threads=3,
-        capacity=500 + 3 * batchsize,
-        min_after_dequeue=200,
-        name="cleanbatch_and_noisebatch")
+    dataset = read_and_decode(TFRecord, context_window_size, feat_size)
+    # Set a random seed with 32
+    dataset = dataset.shuffle(batchsize * 10, seed=32).batch(batchsize)
+    ### To be continued!!!!!
 
     config = tf.ConfigProto()
     config.allow_soft_placement = True
     config.gpu_options.allow_growth = True
     udevice = []
     for device in devices:
-        if len(devices) > 1 and "CPU" in device:
+        if len(devices) > 1 and device.device_type == "GPU":
             continue
         udevice.append(device)
     sess = tf.Session(config=config)
@@ -117,10 +114,10 @@ def main(_):
 
 
 if __name__ == "__main__":
-    try:
-        tf.app.run()
-    except Exception as e:
-        print("Error: ", e)
-    finally:
-        print("Done!")
-    # tf.app.run()
+    # try:
+    #     tf.app.run()
+    # except Exception as e:
+    #     print("Error: ", e)
+    # finally:
+    #     print("Done!")
+    tf.app.run()

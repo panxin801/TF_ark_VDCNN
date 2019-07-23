@@ -18,6 +18,10 @@ def _parse_record(example_proto):
         "noisy_feat": tf.FixedLenFeature([], tf.string)
     }
     parsed_features = tf.parse_single_example(example_proto, features=features)
+    parsed_features["wav_feat"] = tf.decode_raw(parsed_features["wav_feat"],
+                                                tf.half)
+    parsed_features["noisy_feat"] = tf.decode_raw(
+        parsed_features["noisy_feat"], tf.half)
     return parsed_features
 
 
@@ -28,11 +32,8 @@ def read_and_decode(TFRecordqueue, context_window_size, feat_size):
     with tf.Session() as sess:
         features = sess.run(iterator.get_next())
         # Check here http://osask.cn/front/ask/view/289151
-        clean_feats = tf.decode_raw(features["wav_feat"],
-                                    tf.half)  # tf.half===tf.float16
         clean_feats.set_shape([context_window_size * feat_size])
         sliced_feat = tf.reshape(clean_feats, [context_window_size, feat_size])
-        noise_feats = tf.decode_raw(features["noisy_feat"], tf.half)
         noise_feats.set_shape([context_window_size * feat_size])
         sliced_noise_feat = tf.reshape(noise_feats,
                                        [context_window_size, feat_size])
@@ -48,7 +49,6 @@ def main(_):
         currentPath = os.path.dirname(os.path.abspath(__file__))
         TFRecord = os.path.join(currentPath, os.path.join(
             "data", args.TFRecord))
-        TFRecordqueue = tf.train.string_input_producer([TFRecord])
         clean_feats, noise_feats = read_and_decode(
             TFRecord, 11, 43)  # 11 means context window size
         # cleanbatch, noisebatch = tf.train.shuffle_batch(
