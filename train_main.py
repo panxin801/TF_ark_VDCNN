@@ -107,6 +107,13 @@ def main(_):
         num_example += 1
     print("total examples in TFRecords {} : {}".format(TFRecord, num_example))
     num_batchs = num_example / batchsize
+    try:
+        pass
+    except tf.errors.OutOfRangeError:
+        print("Done training, epoch limit {} reached.".format(num_epochs))
+    finally:
+        coord.request_stop()
+    # coord.join(threads)
 
 
 if __name__ == "__main__":
