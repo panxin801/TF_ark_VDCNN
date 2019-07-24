@@ -60,9 +60,17 @@ def main(_):
     currentPath = os.path.dirname(os.path.abspath(__file__))
 
     TFRecord = os.path.join(currentPath, os.path.join("data", args.TFRecord))
+    num_example = 0
+    for record in tf.python_io.tf_record_iterator(TFRecord):
+        num_example += 1
+    print("total examples in TFRecords {} : {}".format(TFRecord, num_example))
+    num_batchs = num_example / batchsize
+    num_repeats = int(num_batchs * num_epochs) + 1
+
     dataset = read_and_decode(TFRecord, context_window_size, feat_size)
     # Set a random seed with 32
-    dataset = dataset.shuffle(batchsize * 10, seed=32).batch(batchsize)
+    dataset = dataset.repeat(num_repeats).shuffle(
+        batchsize * 10, seed=32).batch(batchsize)
     ### To be continued!!!!!
 
     config = tf.ConfigProto()
@@ -96,21 +104,13 @@ def main(_):
             zip(gradients, variables), global_step=global_step)
     print("Initializing all variables.")
     sess.run(tf.global_variables_initializer())
-    coord = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(sess=sess, coord=coord)
     print("sampling some wavs to store  sample references")
-    num_example = 0
-    for record in tf.python_io.tf_record_iterator(TFRecord):
-        num_example += 1
-    print("total examples in TFRecords {} : {}".format(TFRecord, num_example))
-    num_batchs = num_example / batchsize
-    try:
-        pass
-    except tf.errors.OutOfRangeError:
-        print("Done training, epoch limit {} reached.".format(num_epochs))
-    finally:
-        coord.request_stop()
-    # coord.join(threads)
+
+    # try:
+    #     pass
+    # except tf.errors.OutOfRangeError:
+    #     print("Done training, epoch limit {} reached.".format(num_epochs))
+    # finally:
 
 
 if __name__ == "__main__":
