@@ -65,12 +65,14 @@ def main(_):
         num_example += 1
     print("total examples in TFRecords {} : {}".format(TFRecord, num_example))
     num_batchs = num_example / batchsize
-    num_repeats = int(num_batchs * num_epochs) + 1
+    num_iters = int(num_batchs * num_epochs) + 1
 
     dataset = read_and_decode(TFRecord, context_window_size, feat_size)
     # Set a random seed with 32
-    dataset = dataset.repeat(num_repeats).shuffle(
-        batchsize * 10, seed=32).batch(batchsize)
+    dataset = dataset.repeat(num_epochs).batch(batchsize).shuffle(
+        batchsize * 10, seed=32)
+    data_iterator = dataset.make_one_shot_iterator()
+    sliced_feat, sliced_noise_feat = data_iterator.get_next()
     ### To be continued!!!!!
 
     config = tf.ConfigProto()
@@ -105,7 +107,19 @@ def main(_):
     print("Initializing all variables.")
     sess.run(tf.global_variables_initializer())
     print("sampling some wavs to store  sample references")
-
+    with sess:
+        for i in range(num_iters):
+            print(i)
+            feed = {
+                cnn_model.input_x: sliced_noise_feat,
+                cnn_model.input_y: sliced_feat,
+                cnn_model.is_training: True
+            }
+            _, step, loss, accuracy = sess.run(
+                [train_op, global_step, cnn_model.loss, cnn_model.accuracy],
+                feed_dict)
+            print("{}: step {}, Epoch {}, loss {:g}, accuracy {}".format())
+    #
     # try:
     #     pass
     # except tf.errors.OutOfRangeError:
