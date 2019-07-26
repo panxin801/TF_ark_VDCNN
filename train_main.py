@@ -20,35 +20,42 @@ parser.add_argument(
     "Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
 )
 args = parser.parse_args()
-# Set 2 global variables
+# Set some global variables
 context_window_size = 11
 feat_size = 43
-
-
-def _parse_record(example_proto):
-    features = {
-        "wav_feat": tf.FixedLenFeature([], tf.string),
-        "noisy_feat": tf.FixedLenFeature([], tf.string)
-    }
-    parsed_features = tf.parse_single_example(example_proto, features=features)
-    clean_feats = tf.decode_raw(parsed_features["wav_feat"], tf.float32)
-    noise_feats = tf.decode_raw(parsed_features["noisy_feat"], tf.float32)
-    sliced_feat = tf.reshape(clean_feats, [context_window_size, feat_size])
-    noise_feats.set_shape([context_window_size * feat_size])
-    sliced_noise_feat = tf.reshape(noise_feats,
-                                   [context_window_size, feat_size])
-    return sliced_feat, sliced_noise_feat
+batchsize = 32
+num_epochs = 3
 
 
 def read_and_decode(TFRecord, context_window_size, feat_size):
+    def _parse_record(example_proto):
+        features = {
+            "wav_feat": tf.FixedLenFeature([], tf.string),
+            "noisy_feat": tf.FixedLenFeature([], tf.string)
+        }
+        parsed_features = tf.parse_single_example(
+            example_proto, features=features)
+        clean_feats = tf.decode_raw(parsed_features["wav_feat"], tf.float32)
+        noise_feats = tf.decode_raw(parsed_features["noisy_feat"], tf.float32)
+
+        sliced_feat = tf.reshape(clean_feats,
+                                 [context_window_size, feat_size, 1])
+        # noise_feats.set_shape([context_window_size * feat_size])
+        sliced_noise_feat = tf.reshape(noise_feats,
+                                       [context_window_size, feat_size, 1])
+        return sliced_feat, sliced_noise_feat
+
     dataset = tf.data.TFRecordDataset(TFRecord)
-    dataset = dataset.map(_parse_record)
-    return dataset
+    dataset = dataset.map(_parse_record).repeat().batch(batchsize).shuffle(
+        batchsize * 10, seed=32)
+    data_iterator = dataset.make_one_shot_iterator()
+    sliced_feat, sliced_noise_feat = data_iterator.get_next()
+    return sliced_feat, sliced_noise_feat
 
 
 def main(_):
     # Set some Top params
-    batchsize = 32
+    # batchsize = 32
     # context_window_size = 11
     # feat_size = 43
     ### Change the 2 params to global params
@@ -56,7 +63,7 @@ def main(_):
     use_he_uniform = True
     optional_shortcut = False
     learning_rate = 1e-2
-    num_epochs = 3
+    # num_epochs = 3
     currentPath = os.path.dirname(os.path.abspath(__file__))
 
     TFRecord = os.path.join(currentPath, os.path.join("data", args.TFRecord))
@@ -67,13 +74,8 @@ def main(_):
     num_batchs = num_example / batchsize
     num_iters = int(num_batchs * num_epochs) + 1
 
-    dataset = read_and_decode(TFRecord, context_window_size, feat_size)
-    # Set a random seed with 32
-    dataset = dataset.repeat(num_epochs).batch(batchsize).shuffle(
-        batchsize * 10, seed=32)
-    data_iterator = dataset.make_one_shot_iterator()
-    sliced_feat, sliced_noise_feat = data_iterator.get_next()
-    ### To be continued!!!!!
+    sliced_feat_op, sliced_noise_feat_op = read_and_decode(
+        TFRecord, context_window_size, feat_size)
 
     config = tf.ConfigProto()
     config.allow_soft_placement = True
@@ -110,6 +112,8 @@ def main(_):
     with sess:
         for i in range(num_iters):
             print(i)
+            sliced_feat, sliced_noise_feat = sess.run(
+                [sliced_feat_op, sliced_noise_feat_op])
             feed = {
                 cnn_model.input_x: sliced_noise_feat,
                 cnn_model.input_y: sliced_feat,
@@ -117,8 +121,9 @@ def main(_):
             }
             _, step, loss, accuracy = sess.run(
                 [train_op, global_step, cnn_model.loss, cnn_model.accuracy],
-                feed_dict)
-            print("{}: step {}, Epoch {}, loss {:g}, accuracy {}".format())
+                feed)
+            print("step {}, Epoch {}, loss {:g}, accuracy {}".format(
+                step, num_batchs, loss, accuracy))
     #
     # try:
     #     pass
