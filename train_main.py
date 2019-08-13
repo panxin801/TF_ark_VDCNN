@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 import tensorflow as tf
 import numpy as np
 import argparse
@@ -16,8 +17,7 @@ parser.add_argument(
     "--downsampling-type",
     type=str,
     default="maxpool",
-    help=
-    "Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
+    help="Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
 )
 args = parser.parse_args()
 # Set some global variables
@@ -25,6 +25,7 @@ context_window_size = 11
 feat_size = 43
 batchsize = 32
 num_epochs = 3
+save_freq = 50
 
 
 def read_and_decode(TFRecord, context_window_size, feat_size):
@@ -58,13 +59,18 @@ def main(_):
     # batchsize = 32
     # context_window_size = 11
     # feat_size = 43
-    ### Change the 2 params to global params
+    # Change the 2 params to global params
     depth = 9
     use_he_uniform = True
     optional_shortcut = False
     learning_rate = 1e-2
     # num_epochs = 3
     currentPath = os.path.dirname(os.path.abspath(__file__))
+
+    saver_path = os.path.join(currentPath, "model_save")
+    saver = tf.train.Saver()  # local model saver
+    if not os.path.exists(saver_path):
+        os.mkdir(saver_path)  # create save dir
 
     TFRecord = os.path.join(currentPath, os.path.join("data", args.TFRecord))
     num_example = 0
@@ -97,7 +103,7 @@ def main(_):
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
         global_step = tf.Variable(0, name="global_step", trainable=False)
-        ### TODO: change the num_batches_per_epoch update strategynum_epochs*num_batches_per_epoch
+        # TODO: change the num_batches_per_epoch update strategynum_epochs*num_batches_per_epoch
         learning_rate = tf.train.exponential_decay(
             learning_rate, global_step, num_epochs, 0.95, staircase=True)
         optimizer = tf.train.MomentumOptimizer(learning_rate, 0.9)
@@ -108,7 +114,11 @@ def main(_):
             zip(gradients, variables), global_step=global_step)
     print("Initializing all variables.")
     sess.run(tf.global_variables_initializer())
-    print("sampling some wavs to store  sample references")
+
+    if not os.path.exists(os.path.join(saver_path, "train")):
+        os.mkdir(os.path.join(saver_path, "train"))
+    writer = tf.summary.FileWriter(
+        os.path.join(saver_path, "train"), sess.graph)
     with sess:
         for i in range(num_iters):
             print(i)
@@ -124,12 +134,16 @@ def main(_):
                 feed)
             print("step {}, Epoch {}, loss {:g}, accuracy {}".format(
                 step, num_batchs, loss, accuracy))
-    #
-    # try:
-    #     pass
-    # except tf.errors.OutOfRangeError:
-    #     print("Done training, epoch limit {} reached.".format(num_epochs))
-    # finally:
+            if i % save_freq == 0:
+                saver.save(sess, saver_path, global_step=i)
+                writer.add_summary(loss,step)
+                writer.add_summary(accuracy,step)
+                #
+                # try:
+                #     pass
+                # except tf.errors.OutOfRangeError:
+                #     print("Done training, epoch limit {} reached.".format(num_epochs))
+                # finally:
 
 
 if __name__ == "__main__":
