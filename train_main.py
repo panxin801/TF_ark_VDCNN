@@ -24,7 +24,7 @@ args = parser.parse_args()
 context_window_size = 11
 feat_size = 43
 batchsize = 32
-num_epochs = 30
+num_epochs = 3
 save_freq = 50
 
 

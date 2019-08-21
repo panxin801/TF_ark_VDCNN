@@ -14,15 +14,16 @@ parser.add_argument(
     type=str,
     default="output_TFRecord.tfrecords",
     help="Path and name of TFRecord file.")
-parser.add_argument("--model-path", type=str,
-                    default="model_save", help="Model save dir.")
-parser.add_argument("--model-name", type=str,
-                    default="saver-637", help="Saver name")
+parser.add_argument(
+    "--model-path", type=str, default="model_save", help="Model save dir.")
+parser.add_argument(
+    "--model-name", type=str, default="saver-63", help="Saver name")
 parser.add_argument(
     "--downsampling-type",
     type=str,
     default="maxpool",
-    help="Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
+    help=
+    "Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
 )
 args = parser.parse_args()
 # Set some global variables
@@ -50,39 +51,38 @@ def read_and_decode(TFRecord, context_window_size, feat_size):
         return sliced_feat, sliced_noise_feat
 
     dataset = tf.data.TFRecordDataset(TFRecord)
+    dataset = dataset.map(_parse_record).batch(batchsize)
     data_iterator = dataset.make_one_shot_iterator()
     sliced_feat, sliced_noise_feat = data_iterator.get_next()
     return sliced_feat, sliced_noise_feat
 
 
-def clean(sliced_noise_feat_op):
+def clean(sess, model, sliced_noise_feat):
     c_res = None
-    for beg_i in range(0, x.shape[0], self.canvas_size):
-        if x.shape[0] - beg_i < self.canvas_size:
-            length = x.shape[0] - beg_i
-            pad = (self.canvas_size) - length
+    for beg_i in range(0, sliced_noise_feat.shape[1], context_window_size):
+        if sliced_noise_feat.shape[1] - beg_i < context_window_size:
+            length = sliced_noise_feat.shape[1] - beg_i
+            pad = context_window_size - length
         else:
-            length = self.canvas_size
+            length = context_window_size
             pad = 0
-        x_ = np.zeros((self.batch_size, self.canvas_size))
-        if pad > 0:
-            x_[0] = np.concatenate((x[beg_i:beg_i + length],
-                                    np.zeros(pad)))
-        else:
-            x_[0] = x[beg_i:beg_i + length]
-        print('Cleaning chunk {} -> {}'.format(beg_i, beg_i + length))
-        fdict = {self.gtruth_noisy[0]: x_}
-        canvas_w = self.sess.run(self.Gs[0], feed_dict=fdict)[0]
-        canvas_w = canvas_w.reshape((self.canvas_size))
-        print('canvas w shape: ', canvas_w.shape)
-        if pad > 0:
-            print('Removing padding of {} samples'.format(pad))
-            # get rid of last padded samples
-            canvas_w = canvas_w[:-pad]
-        if c_res is None:
-            c_res = canvas_w
-        else:
-            c_res = np.concatenate((c_res, canvas_w))
+        x_ = np.zeros((batchsize, context_window_size))
+        # if pad > 0:
+        #     x_[0] = np.concatenate((sliced_noise_feat[beg_i:beg_i + length],
+        #                             np.zeros(pad)))
+        # else:
+        #     x_[0] = sliced_noise_feat[beg_i:beg_i + length,:,:,:]
+        # print('Cleaning chunk {} -> {}'.format(beg_i, beg_i + length))
+        feed = {model.input_x: sliced_noise_feat, model.is_training: False}
+        decode = sess.run(model.predictions, feed)
+        # if pad > 0:
+        #     print('Removing padding of {} samples'.format(pad))
+        #     # get rid of last padded samples
+        #     canvas_w = canvas_w[:-pad]
+        # if c_res is None:
+        #     c_res = canvas_w
+        # else:
+        #     c_res = np.concatenate((c_res, canvas_w))
     return c_res
 
 
@@ -98,19 +98,20 @@ def main(_):
     ckpt = tf.train.get_checkpoint_state(save_path)
     if ckpt and ckpt.model_checkpoint_path:
         ckpt_name = args.model_name
-    saver = tf.train.Saver()
+
     config = tf.ConfigProto()
     config.allow_soft_placement = True
     config.gpu_options.allow_growth = True
 
     sess = tf.Session(config=config)
-    # cnn_model = VDCNN(
-    #     input_dim=[context_window_size, feat_size],
-    #     batchsize=batchsize,
-    #     depth=9,
-    #     downsampling_type=args.downsampling_type,
-    #     use_he_uniform=use_he_uniform,
-    #     optional_shortcut=optional_shortcut)
+    cnn_model = VDCNN(
+        input_dim=[context_window_size, feat_size],
+        batchsize=batchsize,
+        depth=9,
+        downsampling_type=args.downsampling_type,
+        use_he_uniform=use_he_uniform,
+        optional_shortcut=optional_shortcut)
+    saver = tf.train.Saver()
 
     saver.restore(sess, os.path.join(save_path, ckpt_name))
     print("[*] Read {}".format(ckpt_name))
@@ -121,45 +122,39 @@ def main(_):
         num_example += 1
     print("total examples in TFRecords {} : {}".format(TFRecord, num_example))
 
-    sliced_feat_op, sliced_noise_feat_op = read_and_decode(
+    sliced_feat, sliced_noise_feat_op = read_and_decode(
         TFRecord, context_window_size, feat_size)
-
-    clean_feat = clean(sliced_noise_feat_op)
-
-    # update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    # with tf.control_dependencies(update_ops):
-    #     global_step = tf.Variable(0, name="global_step", trainable=False)
-    #     # TODO: change the num_batches_per_epoch update strategynum_epochs*num_batches_per_epoch
-    #     learning_rate = tf.train.exponential_decay(
-    #         learning_rate, global_step, num_epochs, 0.95, staircase=True)
-    #     optimizer = tf.train.MomentumOptimizer(learning_rate, 0.9)
-    #     gradients, variables = zip(
-    #         *optimizer.compute_gradients(cnn_model.loss))
-    #     gradients, _ = tf.clip_by_global_norm(gradients, 7.0)
-    #     train_op = optimizer.apply_gradients(
-    #         zip(gradients, variables), global_step=global_step)
-
     with sess:
-        for i in range(num_iters):
-            print(i)
-            sliced_feat, sliced_noise_feat = sess.run(
-                [sliced_feat_op, sliced_noise_feat_op])
-            feed = {
-                cnn_model.input_x: sliced_noise_feat,
-                cnn_model.input_y: sliced_feat,
-                cnn_model.is_training: True
-            }
-            _, step, loss, accuracy = sess.run(
-                [train_op, global_step, cnn_model.loss, cnn_model.accuracy],
-                feed)
-            train_summary = sess.run(merge_summary, feed_dict={
-                                     cnn_model.input_x: sliced_noise_feat, cnn_model.input_y: sliced_feat, cnn_model.is_training: True})
-            print("step {}, Epoch {}, loss {:g}, accuracy {}".format(
-                step, num_batchs, loss, accuracy))
-            if i % save_freq == 0 or i == (num_iters-1):
-                saver.save(sess, os.path.join(
-                    saver_path, "saver"), global_step=i)
-                writer.add_summary(train_summary, step)
+        sliced_noise_feat = sess.run(sliced_noise_feat_op)
+        clean_feat = clean(sess, cnn_model, sliced_noise_feat)
+    print("good done.")
+
+    # with sess:
+    #     for i in range(num_iters):
+    #         print(i)
+    #         sliced_feat, sliced_noise_feat = sess.run(
+    #             [sliced_feat_op, sliced_noise_feat_op])
+    #         feed = {
+    #             cnn_model.input_x: sliced_noise_feat,
+    #             cnn_model.input_y: sliced_feat,
+    #             cnn_model.is_training: True
+    #         }
+    #         _, step, loss, accuracy = sess.run(
+    #             [train_op, global_step, cnn_model.loss, cnn_model.accuracy],
+    #             feed)
+    #         train_summary = sess.run(
+    #             merge_summary,
+    #             feed_dict={
+    #                 cnn_model.input_x: sliced_noise_feat,
+    #                 cnn_model.input_y: sliced_feat,
+    #                 cnn_model.is_training: True
+    #             })
+    #         print("step {}, Epoch {}, loss {:g}, accuracy {}".format(
+    #             step, num_batchs, loss, accuracy))
+    #         if i % save_freq == 0 or i == (num_iters - 1):
+    #             saver.save(
+    #                 sess, os.path.join(saver_path, "saver"), global_step=i)
+    #             writer.add_summary(train_summary, step)
 
 
 if __name__ == "__main__":
