@@ -24,7 +24,7 @@ args = parser.parse_args()
 context_window_size = 11
 feat_size = 43
 batchsize = 32
-num_epochs = 3
+num_epochs = 30
 save_freq = 50
 
 
@@ -68,7 +68,6 @@ def main(_):
     currentPath = os.path.dirname(os.path.abspath(__file__))
 
     saver_path = os.path.join(currentPath, "model_save")
-    saver = tf.train.Saver()  # local model saver
     if not os.path.exists(saver_path):
         os.mkdir(saver_path)  # create save dir
 
@@ -117,8 +116,12 @@ def main(_):
 
     if not os.path.exists(os.path.join(saver_path, "train")):
         os.mkdir(os.path.join(saver_path, "train"))
+    tf.summary.scalar("loss",cnn_model.loss)
+    merge_summary=tf.summary.merge_all()
     writer = tf.summary.FileWriter(
         os.path.join(saver_path, "train"), sess.graph)
+    saver = tf.train.Saver()  # local model saver 
+
     with sess:
         for i in range(num_iters):
             print(i)
@@ -132,12 +135,13 @@ def main(_):
             _, step, loss, accuracy = sess.run(
                 [train_op, global_step, cnn_model.loss, cnn_model.accuracy],
                 feed)
+            train_summary=sess.run(merge_summary, feed_dict={cnn_model.input_x: sliced_noise_feat,cnn_model.input_y: sliced_feat,cnn_model.is_training: True})
             print("step {}, Epoch {}, loss {:g}, accuracy {}".format(
                 step, num_batchs, loss, accuracy))
-            if i % save_freq == 0:
-                saver.save(sess, saver_path, global_step=i)
-                writer.add_summary(loss,step)
-                writer.add_summary(accuracy,step)
+            if i % save_freq == 0 or i==(num_iters-1):
+                saver.save(sess, os.path.join(saver_path,"saver"), global_step=i)
+                writer.add_summary(train_summary,step)
+                # writer.add_summary(accuracy,step)
                 #
                 # try:
                 #     pass
