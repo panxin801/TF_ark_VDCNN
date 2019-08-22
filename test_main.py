@@ -3,21 +3,15 @@ import sys
 import tensorflow as tf
 import numpy as np
 import argparse
-from tensorflow.python.client import device_lib
 from model import VDCNN
-devices = device_lib.list_local_devices()
+import numpy as np
 
 parser = argparse.ArgumentParser(
     description="Test VDCNN model using test ARK files.")
 parser.add_argument(
-    "--TFRecord",
-    type=str,
-    default="output_TFRecord.tfrecords",
-    help="Path and name of TFRecord file.")
-parser.add_argument(
     "--model-path", type=str, default="model_save", help="Model save dir.")
 parser.add_argument(
-    "--model-name", type=str, default="saver-63", help="Saver name")
+    "--model-name", type=str, default="saver-6", help="Saver name")
 parser.add_argument(
     "--downsampling-type",
     type=str,
@@ -86,6 +80,70 @@ def clean(sess, model, sliced_noise_feat):
     return c_res
 
 
+def ReadARKFile(sess, readFiles, cnn_model):
+    valueList = []
+    num = 0
+    findHead = 0
+
+    for readFile in readFiles:
+        # ID of what started, and care about the bits
+        for line in open(readFile, "rt"):
+            if "  [" in line and findHead == 0:
+                tagid = line.split(" ")[0]
+                findHead = 1
+            elif "]" in line and findHead == 1:
+                Tmpline = line.strip().split("]")[0]
+                Tmpline = Tmpline.strip().split(" ")
+                valueList.append(Tmpline)
+                feat_spectrogram = np.array(valueList, dtype=np.float32)
+                encoder_proc(sess, feat_spectrogram, cnn_model)
+                valueList.clear()
+                num += 1
+                if (num % 500 == 0):
+                    print(num)
+                findHead = 0
+            elif findHead == 1:
+                Tmpline = line.strip()
+                valueList.append(Tmpline.split(" "))
+
+
+def encoder_proc(sess, feat_spectrogram, cnn_model):
+    sliced_feat_spectrogram = slice_wav(feat_spectrogram)
+    if sliced_feat_spectrogram.shape[0] > batchsize:
+        for begin_i in range(batchsize, sliced_feat_spectrogram.shape[0],
+                             batchsize):
+            batch_feat = sliced_feat_spectrogram[begin_i - batchsize:
+                                                 begin_i, :, :]
+            # batch_feat = tf.reshape(
+            #     batch_feat, [batchsize, context_window_size, feat_size, 1])
+            batch_feat = batch_feat.reshape(
+                [batchsize, context_window_size, feat_size, 1])
+            with sess:
+                clean(sess, cnn_model, batch_feat)
+
+
+# and then flatten the input. But if the shape of wav signals less then (time,freq), then padding with 0
+def slice_wav(input_signals, windows_size=11, freq_size=43, stride=1):
+    assert input_signals.shape[1] == freq_size
+    n_samples = input_signals.shape[0]
+    offset = int(stride * windows_size)
+    retSlice = []
+    for start in range(0, n_samples, offset):
+        # Less than 1 signal block
+        end = start + offset
+        if end > n_samples:
+            end = n_samples
+        oneSlice = input_signals[start:end]
+        if oneSlice.shape[0] == windows_size:
+            retSlice.append(oneSlice)
+        elif oneSlice.shape[0] < windows_size:
+            tmpFillZero = np.zeros(
+                [windows_size - oneSlice.shape[0], freq_size], np.float32)
+            oneSlice = np.concatenate((oneSlice, tmpFillZero))
+            retSlice.append(oneSlice)
+    return np.array(retSlice, np.float32)
+
+
 def main(_):
     depth = 9
     use_he_uniform = True
@@ -116,45 +174,19 @@ def main(_):
     saver.restore(sess, os.path.join(save_path, ckpt_name))
     print("[*] Read {}".format(ckpt_name))
 
-    TFRecord = os.path.join(currentPath, os.path.join("data", args.TFRecord))
-    num_example = 0
-    for record in tf.python_io.tf_record_iterator(TFRecord):
-        num_example += 1
-    print("total examples in TFRecords {} : {}".format(TFRecord, num_example))
+    test_path = os.path.join(currentPath, os.path.join("data", "test"))
+    test_list = [
+        os.path.join(test_path, file) for file in os.listdir(test_path)
+        if file.endswith(".txt")
+    ]
+    ReadARKFile(sess, test_list, cnn_model)
 
-    sliced_feat, sliced_noise_feat_op = read_and_decode(
-        TFRecord, context_window_size, feat_size)
-    with sess:
-        sliced_noise_feat = sess.run(sliced_noise_feat_op)
-        clean_feat = clean(sess, cnn_model, sliced_noise_feat)
-    print("good done.")
-
+    # sliced_feat, sliced_noise_feat_op = read_and_decode(
+    #     TFRecord, context_window_size, feat_size)
     # with sess:
-    #     for i in range(num_iters):
-    #         print(i)
-    #         sliced_feat, sliced_noise_feat = sess.run(
-    #             [sliced_feat_op, sliced_noise_feat_op])
-    #         feed = {
-    #             cnn_model.input_x: sliced_noise_feat,
-    #             cnn_model.input_y: sliced_feat,
-    #             cnn_model.is_training: True
-    #         }
-    #         _, step, loss, accuracy = sess.run(
-    #             [train_op, global_step, cnn_model.loss, cnn_model.accuracy],
-    #             feed)
-    #         train_summary = sess.run(
-    #             merge_summary,
-    #             feed_dict={
-    #                 cnn_model.input_x: sliced_noise_feat,
-    #                 cnn_model.input_y: sliced_feat,
-    #                 cnn_model.is_training: True
-    #             })
-    #         print("step {}, Epoch {}, loss {:g}, accuracy {}".format(
-    #             step, num_batchs, loss, accuracy))
-    #         if i % save_freq == 0 or i == (num_iters - 1):
-    #             saver.save(
-    #                 sess, os.path.join(saver_path, "saver"), global_step=i)
-    #             writer.add_summary(train_summary, step)
+    #     sliced_noise_feat = sess.run(sliced_noise_feat_op)
+    #     clean_feat = clean(sess, cnn_model, sliced_noise_feat)
+    # print("good done.")
 
 
 if __name__ == "__main__":
