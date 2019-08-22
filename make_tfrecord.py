@@ -87,7 +87,7 @@ def encoder_proc(feat_spectrogram, noise_feat_spectrogram, output_file):
     # output_file.write(example.SerializeToString())
 
 
-def ReadARKFile(readFile, noise_feats_dict, noise_list, output_file):
+def ReadARKFile(readFile, noise_list, output_file):
     valueList = []
     noise_feat_spectrogram = []
     num = 0
@@ -98,11 +98,9 @@ def ReadARKFile(readFile, noise_feats_dict, noise_list, output_file):
     for line in open(readFile, "rt"):
         if "  [" in line and findHead == 0:
             tagid = line.split(" ")[0]
-            if tagid in noise_feats_dict:
-                noise_ARKID = noise_feats_dict[tagid]
-                noise_feat_spectrogram = findNoiseARK(tagid, noise_ARKID,
-                                                      noise_list)
-                findHead = 1
+            noise_ARKID = readFile.split(".")[1]
+            noise_feat_spectrogram = findNoiseARK(tagid, noise_ARKID,noise_list)
+            findHead = 1
         elif "]" in line and findHead == 1:
             Tmpline = line.strip().split("]")[0]
             Tmpline = Tmpline.strip().split(" ")
@@ -134,25 +132,17 @@ def main():
         if file.endswith(".txt")
     ]
 
-    # Make noise_feats.scp dict
-    noise_feats = os.path.join(data_dir, "noise_feats.scp")
-    noise_feats_dict = {}
-    with open(noise_feats, "rt", encoding="utf-8") as f:
-        for line in f.readlines():
-            key, val = line.split()
-            noise_feats_dict.update({key: val})
-
     outTFRecord = "output_TFRecord.tfrecords"
     outputPath = os.path.join(data_dir, outTFRecord)
     if os.path.exists(outputPath):
         os.unlink(outputPath)  # Delete $outputPath this file
-        # raise ValueError(
-        #     "ERROR: {} already exists. Delete this file or {TODO}.".format(
-        #         outputPath))
-    # TODO set some cover or judge or delete mechanism with $outputPath( this file )
+        raise ValueError(
+            "ERROR: {} already exists. Delete this file or {TODO}.".format(
+                outputPath))
+    #TODO set some cover or judge or delete mechanism with $outputPath( this file )
     output_file = tf.python_io.TFRecordWriter(outputPath)
     for __, clean_ARK_file in enumerate(clean_list):
-        ReadARKFile(clean_ARK_file, noise_feats_dict, noise_list, output_file)
+        ReadARKFile(clean_ARK_file, noise_list, output_file)
 
     output_file.close()
     print("Done!!")
