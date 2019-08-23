@@ -10,14 +10,13 @@ parser = argparse.ArgumentParser(
     description="Test VDCNN model using test ARK files.")
 parser.add_argument(
     "--model-path", type=str, default="model_save", help="Model save dir.")
-parser.add_argument(
-    "--model-name", type=str, default="saver-6", help="Saver name")
+# parser.add_argument(
+#     "--model-name", type=str, default="saver-6", help="Saver name")
 parser.add_argument(
     "--downsampling-type",
     type=str,
     default="maxpool",
-    help=
-    "Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
+    help="Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
 )
 args = parser.parse_args()
 # Set some global variables
@@ -110,16 +109,23 @@ def ReadARKFile(sess, readFiles, cnn_model):
 def encoder_proc(sess, feat_spectrogram, cnn_model):
     sliced_feat_spectrogram = slice_wav(feat_spectrogram)
     if sliced_feat_spectrogram.shape[0] > batchsize:
-        for begin_i in range(batchsize, sliced_feat_spectrogram.shape[0],
+        for begin_i in range(0, sliced_feat_spectrogram.shape[0],
                              batchsize):
-            batch_feat = sliced_feat_spectrogram[begin_i - batchsize:
-                                                 begin_i, :, :]
-            # batch_feat = tf.reshape(
-            #     batch_feat, [batchsize, context_window_size, feat_size, 1])
+            end = begin_i+batchsize
+            if end > sliced_feat_spectrogram.shape[0]:
+                end = sliced_feat_spectrogram.shape[0]
+                pad0 = batchsize-end+begin_i
+                zeros = np.zeros(
+                    [pad0, sliced_feat_spectrogram.shape[1], sliced_feat_spectrogram.shape[2]])
+                batch_feat = np.concatenate(
+                    (sliced_feat_spectrogram[begin_i:end, :, :], zeros))
+            else:
+                batch_feat = sliced_feat_spectrogram[begin_i:end, :, :]
+                # batch_feat = tf.reshape(
+                #     batch_feat, [batchsize, context_window_size, feat_size, 1])
             batch_feat = batch_feat.reshape(
                 [batchsize, context_window_size, feat_size, 1])
-            with sess:
-                clean(sess, cnn_model, batch_feat)
+            clean(sess, cnn_model, batch_feat)
 
 
 # and then flatten the input. But if the shape of wav signals less then (time,freq), then padding with 0
@@ -155,7 +161,7 @@ def main(_):
         raise ValueError("{} not exists!!".format(save_path))
     ckpt = tf.train.get_checkpoint_state(save_path)
     if ckpt and ckpt.model_checkpoint_path:
-        ckpt_name = args.model_name
+        ckpt_name = ckpt.model_checkpoint_path
 
     config = tf.ConfigProto()
     config.allow_soft_placement = True
@@ -179,7 +185,8 @@ def main(_):
         os.path.join(test_path, file) for file in os.listdir(test_path)
         if file.endswith(".txt")
     ]
-    ReadARKFile(sess, test_list, cnn_model)
+    with sess:
+        ReadARKFile(sess, test_list, cnn_model)
 
     # sliced_feat, sliced_noise_feat_op = read_and_decode(
     #     TFRecord, context_window_size, feat_size)
