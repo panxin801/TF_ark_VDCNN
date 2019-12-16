@@ -287,8 +287,9 @@ class VDCNN():
         with tf.name_scope("loss"):
             self.predictions = tf.reshape(self.fc3,
                                           [-1, input_dim[0], input_dim[1], 1])
-            losses = tf.losses.absolute_difference(self.input_y,
-                                                   self.predictions)
+            #losses = tf.losses.absolute_difference(self.input_y,
+            #                                       self.predictions)
+            losses = tf.losses.huber_loss(self.input_y, self.predictions)
             regularization_losses = tf.get_collection(
                 tf.GraphKeys.REGULARIZATION_LOSSES)
             self.loss = tf.reduce_mean(losses) + sum(regularization_losses)

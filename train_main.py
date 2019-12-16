@@ -23,9 +23,9 @@ args = parser.parse_args()
 # Set some global variables
 context_window_size = 11
 feat_size = 43
-batchsize = 32
-num_epochs = 3
-save_freq = 50
+batchsize = 512
+num_epochs = 4
+save_freq = 100
 
 
 def read_and_decode(TFRecord, context_window_size, feat_size):
@@ -63,7 +63,7 @@ def main(_):
     depth = 9
     use_he_uniform = True
     optional_shortcut = False
-    learning_rate = 1e-2
+    learning_rate = 1e-3
     # num_epochs = 3
     currentPath = os.path.dirname(os.path.abspath(__file__))
 
@@ -75,7 +75,7 @@ def main(_):
     num_example = 0
     for record in tf.python_io.tf_record_iterator(TFRecord):
         num_example += 1
-    print("total examples in TFRecords {} : {}".format(TFRecord, num_example))
+    print("#############################total examples in TFRecords {} : {}".format(TFRecord, num_example))
     num_batchs = num_example / batchsize
     num_iters = int(num_batchs * num_epochs) + 1
 
@@ -122,9 +122,9 @@ def main(_):
         os.path.join(saver_path, "train"), sess.graph)
     saver = tf.train.Saver()  # local model saver 
 
+    #num_iters = 1001
     with sess:
         for i in range(num_iters):
-            print(i)
             sliced_feat, sliced_noise_feat = sess.run(
                 [sliced_feat_op, sliced_noise_feat_op])
             feed = {
@@ -136,8 +136,8 @@ def main(_):
                 [train_op, global_step, cnn_model.loss, cnn_model.accuracy],
                 feed)
             train_summary=sess.run(merge_summary, feed_dict={cnn_model.input_x: sliced_noise_feat,cnn_model.input_y: sliced_feat,cnn_model.is_training: True})
-            print("step {}, Epoch {}, loss {:g}, accuracy {}".format(
-                step, num_batchs, loss, accuracy))
+            print("step {}/{}, loss {:g}, accuracy {}".format(
+                step, num_iters, loss, accuracy))
             if i % save_freq == 0 or i==(num_iters-1):
                 saver.save(sess, os.path.join(saver_path,"saver"), global_step=i)
                 writer.add_summary(train_summary,step)
