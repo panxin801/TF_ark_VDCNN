@@ -7,43 +7,6 @@ he_normal = tf.keras.initializers.he_normal()
 regularizer = tf.contrib.layers.l2_regularizer(1e-4)
 
 
-def Deconvolutional_Block(inputs, num_filters, output_shape, name,
-                          is_training):
-    print("-" * 20)
-    print("Deconvolutional Block", str(num_filters), name)
-    print("-" * 20)
-    with tf.variable_scope("deconv_block_" + str(num_filters) + "_" + name):
-        for i in range(2):
-            with tf.variable_scope("deconv1d_%s" % str(i)):
-                filter_shape = [
-                    1,
-                    inputs.get_shape()[2],
-                    inputs.get_shape()[3], num_filters
-                ]
-                W = tf.get_variable(
-                    name='W',
-                    shape=filter_shape,
-                    initializer=he_normal,
-                    regularizer=regularizer)
-                inputs = tf.nn.conv2d_transpose(
-                    inputs,
-                    W,
-                    output_shape,
-                    strides=[1, 1, 1, 1],
-                    padding="SAME")
-                inputs = tf.layers.batch_normalization(
-                    inputs=inputs,
-                    momentum=0.997,
-                    epsilon=1e-5,
-                    center=True,
-                    scale=True,
-                    training=is_training)
-                inputs = tf.nn.relu(inputs)
-                print("Deconv1D:", inputs.get_shape())
-    print("-" * 20)
-    return inputs
-
-
 def Convolutional_Block(inputs, shortcut, num_filters, name, is_training):
     print("-" * 20)
     print("Convolutional Block", str(num_filters), name)
@@ -174,7 +137,6 @@ class VDCNN():
             name="clean_feat")
         self.is_training = tf.placeholder(tf.bool)
         self.layers = []
-        self.deconvOutShape = []
 
         # First Conv Layer
         with tf.variable_scope("First_Conv"):
@@ -189,7 +151,6 @@ class VDCNN():
             #inputs = tf.nn.relu(inputs)
         print("First Conv", inputs.get_shape())
         self.layers.append(inputs)
-        self.deconvOutShape.append(inputs.get_shape())
 
         # Conv Block 64
         for i in range(num_layers[0]):
@@ -211,7 +172,6 @@ class VDCNN():
             optional_shortcut=optional_shortcut,
             shortcut=self.layers[-2])
         self.layers.append(pool1)
-        self.deconvOutShape.append(conv_block.get_shape())
         print("Pooling:", pool1.get_shape())
 
         # Conv Block 128
@@ -234,7 +194,6 @@ class VDCNN():
             optional_shortcut=optional_shortcut,
             shortcut=self.layers[-2])
         self.layers.append(pool2)
-        self.deconvOutShape.append(conv_block.get_shape())
         print("Pooling:", pool2.get_shape())
 
         # Conv Block 256
@@ -257,7 +216,6 @@ class VDCNN():
             optional_shortcut=optional_shortcut,
             shortcut=self.layers[-2])
         self.layers.append(pool3)
-        self.deconvOutShape.append(conv_block.get_shape())
         print("Pooling:", pool3.get_shape())
 
         # Conv Block 512
@@ -273,7 +231,6 @@ class VDCNN():
                 is_training=self.is_training,
                 name=str(i + 1))
             self.layers.append(conv_block)
-        self.deconvOutShape.append(conv_block.get_shape())
 
         # Last pool and then flatten as a vector
         # self.k_pooled = tf.nn.top_k(
@@ -290,122 +247,46 @@ class VDCNN():
             strides=[1, 1, 2, 1],
             padding="SAME",
             name="Last_pool")
-
-        # The following parts are deconv block
-        # Conv Block 512
-        for i in range(num_layers[3]):
-            if i < num_layers[3] - 1 and optional_shortcut:
-                shortcut = self.layers[-1]
-            else:
-                shortcut = None
-            deconv_block = Deconvolutional_Block(
-                inputs=self.layers[-1],
-                num_filters=512,
-                output_shape=self.deconvOutShape[4],
-                is_training=self.is_training,
-                name=str(i + 1))
-            self.layers.append(deconv_block)
-
-        # Conv Block 256
-        for i in range(num_layers[2]):
-            if i < num_layers[2] - 1 and optional_shortcut:
-                shortcut = self.layers[-1]
-            else:
-                shortcut = None
-            deconv_block = Deconvolutional_Block(
-                inputs=self.layers[-1],
-                num_filters=256,
-                output_shape=self.deconvOutShape[3],
-                is_training=self.is_training,
-                name=str(i + 1))
-            self.layers.append(deconv_block)
-        # pool3 = downsampling(
-        #     self.layers[-1],
-        #     downsampling_type=downsampling_type,
-        #     name='pool3',
-        #     optional_shortcut=optional_shortcut,
-        #     shortcut=self.layers[-2])
-        # self.layers.append(pool3)
-        # print("Pooling:", pool3.get_shape())
-
-        # Conv Block 128
-        for i in range(num_layers[1]):
-            if i < num_layers[1] - 1 and optional_shortcut:
-                shortcut = self.layers[-1]
-            else:
-                shortcut = None
-            deconv_block = Deconvolutional_Block(
-                inputs=self.layers[-1],
-                num_filters=128,
-                output_shape=self.deconvOutShape[2],
-                is_training=self.is_training,
-                name=str(i + 1))
-            self.layers.append(deconv_block)
-        # pool2 = downsampling(
-        #     self.layers[-1],
-        #     downsampling_type=downsampling_type,
-        #     name='pool2',
-        #     optional_shortcut=optional_shortcut,
-        #     shortcut=self.layers[-2])
-        # self.layers.append(pool2)
-        # print("Pooling:", pool2.get_shape())
-
-        # Conv Block 64
-        for i in range(num_layers[0]):
-            if i < num_layers[0] - 1 and optional_shortcut:
-                shortcut = self.layers[-1]
-            else:
-                shortcut = None
-            deconv_block = Deconvolutional_Block(
-                inputs=self.layers[-1],
-                num_filters=64,
-                output_shape=self.deconvOutShape[1],
-                is_training=self.is_training,
-                name=str(i + 1))
-            self.layers.append(deconv_block)
-        # pool1 = downsampling(
-        #     self.layers[-1],
-        #     downsampling_type=downsampling_type,
-        #     name='pool1',
-        #     optional_shortcut=optional_shortcut,
-        #     shortcut=self.layers[-2])
-        # self.layers.append(pool1)
-        # print("Pooling:", pool1.get_shape())
-
-        # First Conv Layer
-        with tf.variable_scope("Last_Conv"):
-            filter_shape = [1, 3, 1, 64]
-            W = tf.get_variable(
-                name='W_1',
-                shape=filter_shape,
-                initializer=he_normal,
-                regularizer=regularizer)
-            output = tf.nn.conv2d_transpose(
-                self.layers[-1],
-                W, [-1, batchsize, input_dim[0], input_dim[1], 1],
-                strides=[1, 1, 1, 1],
-                padding="SAME")
-            # inputs = tf.nn.relu(inputs)
-        print("Last Conv", output.get_shape())
-        self.layers.append(inputs)
-        # End of deconv block
+        self.flatten = tf.reshape(self.Last_pool, (batchsize, -1))
 
         # fc1
-        # with tf.variable_scope('fc1'):
-        #     w = tf.get_variable(
-        #         'w', [self.flatten.get_shape()[1], 2048],
-        #         initializer=he_normal,
-        #         regularizer=regularizer)
-        #     b = tf.get_variable(
-        #         'b', [2048], initializer=tf.constant_initializer(1.0))
-        #     out = tf.matmul(self.flatten, w) + b
-        #     self.fc1 = tf.nn.relu(out)
+        with tf.variable_scope('fc1'):
+            w = tf.get_variable(
+                'w', [self.flatten.get_shape()[1], 2048],
+                initializer=he_normal,
+                regularizer=regularizer)
+            b = tf.get_variable(
+                'b', [2048], initializer=tf.constant_initializer(1.0))
+            out = tf.matmul(self.flatten, w) + b
+            self.fc1 = tf.nn.relu(out)
+
+        # fc2
+        with tf.variable_scope('fc2'):
+            w = tf.get_variable(
+                'w', [self.fc1.get_shape()[1], 2048],
+                initializer=he_normal,
+                regularizer=regularizer)
+            b = tf.get_variable(
+                'b', [2048], initializer=tf.constant_initializer(1.0))
+            out = tf.matmul(self.fc1, w) + b
+            self.fc2 = tf.nn.relu(out)
+
+        # TODO: modified the dimensions next lines
+        # fc3
+        with tf.variable_scope('fc3'):
+            w = tf.get_variable(
+                'w', [self.fc2.get_shape()[1], input_dim[0] * input_dim[1]],
+                initializer=he_normal,
+                regularizer=regularizer)
+            b = tf.get_variable(
+                'b', [input_dim[0] * input_dim[1]],
+                initializer=tf.constant_initializer(1.0))
+            self.fc3 = tf.matmul(self.fc2, w) + b
 
         # Calculate Absolute error. I don't think Mean Cross-entropy works well
         with tf.name_scope("loss"):
-            # self.predictions = tf.reshape(self.layers[-1],
-            #                               [-1, input_dim[0], input_dim[1], 1])
-            self.predictions = self.layers[-1]
+            self.predictions = tf.reshape(self.fc3,
+                                          [-1, input_dim[0], input_dim[1], 1])
             #losses = tf.losses.absolute_difference(self.input_y,
             #                                       self.predictions)
             losses = tf.losses.huber_loss(self.input_y, self.predictions)

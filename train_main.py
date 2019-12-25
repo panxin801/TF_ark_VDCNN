@@ -17,7 +17,8 @@ parser.add_argument(
     "--downsampling-type",
     type=str,
     default="maxpool",
-    help="Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
+    help=
+    "Types of downsampling methods, use either three of maxpool, k-maxpool and linear (default: 'maxpool')"
 )
 args = parser.parse_args()
 # Set some global variables
@@ -75,7 +76,8 @@ def main(_):
     num_example = 0
     for record in tf.python_io.tf_record_iterator(TFRecord):
         num_example += 1
-    print("#############################total examples in TFRecords {} : {}".format(TFRecord, num_example))
+    print("#############################total examples in TFRecords {} : {}".
+          format(TFRecord, num_example))
     num_batchs = num_example / batchsize
     num_iters = int(num_batchs * num_epochs) + 1
 
@@ -116,11 +118,11 @@ def main(_):
 
     if not os.path.exists(os.path.join(saver_path, "train")):
         os.mkdir(os.path.join(saver_path, "train"))
-    tf.summary.scalar("loss",cnn_model.loss)
-    merge_summary=tf.summary.merge_all()
+    tf.summary.scalar("loss", cnn_model.loss)
+    merge_summary = tf.summary.merge_all()
     writer = tf.summary.FileWriter(
         os.path.join(saver_path, "train"), sess.graph)
-    saver = tf.train.Saver()  # local model saver 
+    saver = tf.train.Saver()  # local model saver
 
     #num_iters = 1001
     with sess:
@@ -135,12 +137,19 @@ def main(_):
             _, step, loss, accuracy = sess.run(
                 [train_op, global_step, cnn_model.loss, cnn_model.accuracy],
                 feed)
-            train_summary=sess.run(merge_summary, feed_dict={cnn_model.input_x: sliced_noise_feat,cnn_model.input_y: sliced_feat,cnn_model.is_training: True})
+            train_summary = sess.run(
+                merge_summary,
+                feed_dict={
+                    cnn_model.input_x: sliced_noise_feat,
+                    cnn_model.input_y: sliced_feat,
+                    cnn_model.is_training: True
+                })
             print("step {}/{}, loss {:g}, accuracy {}".format(
                 step, num_iters, loss, accuracy))
-            if i % save_freq == 0 or i==(num_iters-1):
-                saver.save(sess, os.path.join(saver_path,"saver"), global_step=i)
-                writer.add_summary(train_summary,step)
+            if i % save_freq == 0 or i == (num_iters - 1):
+                saver.save(
+                    sess, os.path.join(saver_path, "saver"), global_step=i)
+                writer.add_summary(train_summary, step)
                 # writer.add_summary(accuracy,step)
                 #
                 # try:

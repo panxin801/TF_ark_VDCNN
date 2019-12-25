@@ -1,7 +1,7 @@
 # TF_ark_VDCNN
 Using tensorflow and ARK files for VDCNN 
 
-## Dependicences
+## Dependiences
 This experiment is based on
 1. Python3.5.4 64bit
 2. Tensorflow-cpy version 1.9.0 AMD64 or
