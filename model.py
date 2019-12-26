@@ -18,7 +18,8 @@ def Deconvolutional_Block(inputs, num_filters, output_shape, name,
                 filter_shape = [
                     1,
                     inputs.get_shape()[2],
-                    inputs.get_shape()[3], num_filters
+                    num_filters,
+                    inputs.get_shape()[3]
                 ]
                 W = tf.get_variable(
                     name='W',
@@ -29,7 +30,7 @@ def Deconvolutional_Block(inputs, num_filters, output_shape, name,
                     inputs,
                     W,
                     output_shape,
-                    strides=[1, 1, 1, 1],
+                    strides=[1,1,1,1],
                     padding="SAME")
                 inputs = tf.layers.batch_normalization(
                     inputs=inputs,
@@ -292,12 +293,8 @@ class VDCNN():
             name="Last_pool")
 
         # The following parts are deconv block
-        # Conv Block 512
+        # Deconv Block 512
         for i in range(num_layers[3]):
-            if i < num_layers[3] - 1 and optional_shortcut:
-                shortcut = self.layers[-1]
-            else:
-                shortcut = None
             deconv_block = Deconvolutional_Block(
                 inputs=self.layers[-1],
                 num_filters=512,
@@ -306,12 +303,8 @@ class VDCNN():
                 name=str(i + 1))
             self.layers.append(deconv_block)
 
-        # Conv Block 256
+        # Deconv Block 256
         for i in range(num_layers[2]):
-            if i < num_layers[2] - 1 and optional_shortcut:
-                shortcut = self.layers[-1]
-            else:
-                shortcut = None
             deconv_block = Deconvolutional_Block(
                 inputs=self.layers[-1],
                 num_filters=256,
@@ -328,12 +321,8 @@ class VDCNN():
         # self.layers.append(pool3)
         # print("Pooling:", pool3.get_shape())
 
-        # Conv Block 128
+        # Deconv Block 128
         for i in range(num_layers[1]):
-            if i < num_layers[1] - 1 and optional_shortcut:
-                shortcut = self.layers[-1]
-            else:
-                shortcut = None
             deconv_block = Deconvolutional_Block(
                 inputs=self.layers[-1],
                 num_filters=128,
@@ -350,12 +339,8 @@ class VDCNN():
         # self.layers.append(pool2)
         # print("Pooling:", pool2.get_shape())
 
-        # Conv Block 64
+        # Deconv Block 64
         for i in range(num_layers[0]):
-            if i < num_layers[0] - 1 and optional_shortcut:
-                shortcut = self.layers[-1]
-            else:
-                shortcut = None
             deconv_block = Deconvolutional_Block(
                 inputs=self.layers[-1],
                 num_filters=64,
@@ -372,8 +357,8 @@ class VDCNN():
         # self.layers.append(pool1)
         # print("Pooling:", pool1.get_shape())
 
-        # First Conv Layer
-        with tf.variable_scope("Last_Conv"):
+        # Last Deconv Layer
+        with tf.variable_scope("Last_Deconv"):
             filter_shape = [1, 3, 1, 64]
             W = tf.get_variable(
                 name='W_1',
@@ -382,12 +367,12 @@ class VDCNN():
                 regularizer=regularizer)
             output = tf.nn.conv2d_transpose(
                 self.layers[-1],
-                W, [-1, batchsize, input_dim[0], input_dim[1], 1],
+                W, [batchsize, input_dim[0], input_dim[1], 1],
                 strides=[1, 1, 1, 1],
                 padding="SAME")
             # inputs = tf.nn.relu(inputs)
         print("Last Conv", output.get_shape())
-        self.layers.append(inputs)
+        self.layers.append(output)
         # End of deconv block
 
         # fc1
@@ -401,7 +386,6 @@ class VDCNN():
         #     out = tf.matmul(self.flatten, w) + b
         #     self.fc1 = tf.nn.relu(out)
 
-        # Calculate Absolute error. I don't think Mean Cross-entropy works well
         with tf.name_scope("loss"):
             # self.predictions = tf.reshape(self.layers[-1],
             #                               [-1, input_dim[0], input_dim[1], 1])

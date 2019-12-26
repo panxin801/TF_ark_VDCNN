@@ -24,7 +24,7 @@ args = parser.parse_args()
 # Set some global variables
 context_window_size = 11
 feat_size = 43
-batchsize = 512
+batchsize = 10 # 512->10
 num_epochs = 4
 save_freq = 100
 
@@ -76,6 +76,8 @@ def main(_):
     num_example = 0
     for record in tf.python_io.tf_record_iterator(TFRecord):
         num_example += 1
+        if num_example == 1: # new add!!!!
+            break;
     print("#############################total examples in TFRecords {} : {}".
           format(TFRecord, num_example))
     num_batchs = num_example / batchsize
@@ -102,6 +104,7 @@ def main(_):
         optional_shortcut=optional_shortcut)
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    print("2!!!!!!")
     with tf.control_dependencies(update_ops):
         global_step = tf.Variable(0, name="global_step", trainable=False)
         # TODO: change the num_batches_per_epoch update strategynum_epochs*num_batches_per_epoch
@@ -115,7 +118,8 @@ def main(_):
             zip(gradients, variables), global_step=global_step)
     print("Initializing all variables.")
     sess.run(tf.global_variables_initializer())
-
+    
+    print("3!!!!!!")
     if not os.path.exists(os.path.join(saver_path, "train")):
         os.mkdir(os.path.join(saver_path, "train"))
     tf.summary.scalar("loss", cnn_model.loss)
