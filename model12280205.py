@@ -61,9 +61,12 @@ def Deconvolutional_Block_256(inputs, num_filters, output_shape, name,
                 inputs.get_shape()[2], num_filters,
                 inputs.get_shape()[3]
             ]
-            # if current_name == block_num - 1 and i == 2 - 1:
-            if current_name == 0 and i == 0:
-                filter_shape = [1, 6, num_filters, inputs.get_shape()[3]]
+            if current_name == block_num - 1 and i == 2 - 1:
+                # filter_shape = [
+                #     1,
+                #     inputs.get_shape()[2], num_filters,
+                #     inputs.get_shape()[3]
+                # ]
                 stride = [1, 1, 1, 1]
                 padding = "VALID"
             else:
@@ -76,7 +79,7 @@ def Deconvolutional_Block_256(inputs, num_filters, output_shape, name,
                     initializer=he_normal,
                     regularizer=regularizer)
                 inputs = tf.nn.conv2d_transpose(
-                    inputs, W, output_shape, strides=stride, padding=padding)
+                    inputs, W, output_shape, strides=stride, padding="SAME")
                 inputs = tf.layers.batch_normalization(
                     inputs=inputs,
                     momentum=0.997,
@@ -103,8 +106,8 @@ def Deconvolutional_Block_128(inputs, num_filters, output_shape, name,
                 inputs.get_shape()[2], num_filters,
                 inputs.get_shape()[3]
             ]
-            if current_name == 0 and i == 0:
-                filter_shape = [1, 11, num_filters, inputs.get_shape()[3]]
+            if current_name == block_num - 1 and i == 2 - 1:
+                # filter_shape = [1, inputs.get_shape()[2], num_filters, inputs.get_shape()[3]]
                 stride = [1, 1, 1, 1]
                 padding = "VALID"
             else:
@@ -144,13 +147,10 @@ def Deconvolutional_Block(inputs, num_filters, output_shape, name, is_training,
                 inputs.get_shape()[2], num_filters,
                 inputs.get_shape()[3]
             ]
-            if current_name == 0 and i == 0:
-                filter_shape = [1, 5, num_filters, inputs.get_shape()[3]]
+            if current_name == block_num - 1 and i == 2 - 1:
                 stride = [1, 1, 1, 1]
-                padding = "VALID"
             else:
                 stride = [1, 1, 1, 1]
-                padding = "SAME"
             with tf.variable_scope("deconv1d_%s" % str(i)):
                 W = tf.get_variable(
                     name='W',
@@ -158,7 +158,7 @@ def Deconvolutional_Block(inputs, num_filters, output_shape, name, is_training,
                     initializer=he_normal,
                     regularizer=regularizer)
                 inputs = tf.nn.conv2d_transpose(
-                    inputs, W, output_shape, strides=stride, padding=padding)
+                    inputs, W, output_shape, strides=stride, padding="SAME")
                 inputs = tf.layers.batch_normalization(
                     inputs=inputs,
                     momentum=0.997,

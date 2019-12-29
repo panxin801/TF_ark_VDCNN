@@ -24,7 +24,7 @@ args = parser.parse_args()
 # Set some global variables
 context_window_size = 11
 feat_size = 43
-batchsize = 10 # 512->10
+batchsize = 32  # 512->10
 num_epochs = 4
 save_freq = 100
 
@@ -76,8 +76,8 @@ def main(_):
     num_example = 0
     for record in tf.python_io.tf_record_iterator(TFRecord):
         num_example += 1
-        if num_example == 1: # new add!!!!
-            break;
+        # if num_example == 1:  # new add!!!!
+        #     break
     print("#############################total examples in TFRecords {} : {}".
           format(TFRecord, num_example))
     num_batchs = num_example / batchsize
@@ -118,8 +118,7 @@ def main(_):
             zip(gradients, variables), global_step=global_step)
     print("Initializing all variables.")
     sess.run(tf.global_variables_initializer())
-    
-    print("3!!!!!!")
+
     if not os.path.exists(os.path.join(saver_path, "train")):
         os.mkdir(os.path.join(saver_path, "train"))
     tf.summary.scalar("loss", cnn_model.loss)
@@ -128,7 +127,7 @@ def main(_):
         os.path.join(saver_path, "train"), sess.graph)
     saver = tf.train.Saver()  # local model saver
 
-    #num_iters = 1001
+    num_iters = 101
     with sess:
         for i in range(num_iters):
             sliced_feat, sliced_noise_feat = sess.run(
