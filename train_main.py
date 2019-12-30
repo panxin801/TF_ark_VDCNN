@@ -127,7 +127,7 @@ def main(_):
         os.path.join(saver_path, "train"), sess.graph)
     saver = tf.train.Saver()  # local model saver
 
-    num_iters = 101
+    #num_iters = 101
     with sess:
         for i in range(num_iters):
             sliced_feat, sliced_noise_feat = sess.run(
