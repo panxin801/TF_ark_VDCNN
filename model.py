@@ -461,14 +461,6 @@ class VDCNN():
                 name=str(i + 1),
                 block_num=num_layers[1])
             self.layers.append(deconv_block)
-        # pool2 = downsampling(
-        #     self.layers[-1],
-        #     downsampling_type=downsampling_type,
-        #     name='pool2',
-        #     optional_shortcut=optional_shortcut,
-        #     shortcut=self.layers[-2])
-        # self.layers.append(pool2)
-        # print("Pooling:", pool2.get_shape())
 
         # Deconv Block 64
         for i in range(num_layers[0]):
@@ -479,14 +471,6 @@ class VDCNN():
                 is_training=self.is_training,
                 name=str(i + 1))
             self.layers.append(deconv_block)
-        # pool1 = downsampling(
-        #     self.layers[-1],
-        #     downsampling_type=downsampling_type,
-        #     name='pool1',
-        #     optional_shortcut=optional_shortcut,
-        #     shortcut=self.layers[-2])
-        # self.layers.append(pool1)
-        # print("Pooling:", pool1.get_shape())
 
         # Last Deconv Layer
         with tf.variable_scope("Last_Deconv"):

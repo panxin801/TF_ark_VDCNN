@@ -24,7 +24,7 @@ args = parser.parse_args()
 # Set some global variables
 context_window_size = 11
 feat_size = 43
-batchsize = 32  # 512->10
+batchsize = 256  # 512->10
 num_epochs = 4
 save_freq = 100
 
