@@ -256,7 +256,7 @@ def downsampling(inputs,
         filters=pool.get_shape()[3] * 2,
         kernel_size=1,
         strides=1,
-        padding='SAME',  #"VALID"->"SAME"
+        padding='SAME',  # "VALID"->"SAME"
         use_bias=False)
 
 
@@ -314,7 +314,7 @@ class VDCNN():
                 regularizer=regularizer)
             inputs = tf.nn.conv2d(
                 self.input_x, W, strides=[1, 1, 1, 1], padding="SAME")
-            #inputs = tf.nn.relu(inputs)
+            # inputs = tf.nn.relu(inputs)
         print("First Conv", inputs.get_shape())
         self.layers.append(inputs)
         self.deconvOutShape.append(inputs.get_shape())
@@ -517,3 +517,260 @@ class VDCNN():
             correct_predictions = tf.equal(self.predictions, self.input_y)
             self.accuracy = tf.reduce_mean(
                 tf.cast(correct_predictions, "float"), name="accuracy")
+
+
+# Define downconv
+def downconv(x,
+             output_dim,
+             kwidth=5,
+             pool=2,
+             init=None,
+             uniform=False,
+             bias_init=None,
+             name='downconv'):
+    """ Downsampled convolution 1d """
+    w_init = init
+    if w_init is None:
+        w_init = xavier_initializer(uniform=uniform)
+    with tf.variable_scope(name):
+        W = tf.get_variable(
+            'W',
+            [kwidth, kwidth, x.get_shape()[-1], output_dim],
+            initializer=w_init)
+        conv = tf.nn.conv2d(x, W, strides=[1, 1, pool, 1], padding='SAME')
+        if bias_init is not None:
+            b = tf.get_variable('b', [output_dim], initializer=bias_init)
+            conv = tf.reshape(tf.nn.bias_add(conv, b), conv.get_shape())
+        else:
+            conv = tf.reshape(conv, conv.get_shape())
+        # reshape back to 1d
+        # conv = tf.reshape(
+        #     conv,
+        #     conv.get_shape().as_list()[:2] + [conv.get_shape().as_list()[-1]])
+        return conv
+
+
+def prelu(x, name='prelu', ref=False):
+    in_shape = x.get_shape().as_list()
+    with tf.variable_scope(name):
+        # make one alpha per feature
+        alpha = tf.get_variable(
+            'alpha',
+            in_shape[-1],
+            initializer=tf.constant_initializer(0.),
+            dtype=tf.float32)
+        pos = tf.nn.relu(x)
+        neg = alpha * (x - tf.abs(x)) * .5
+        if ref:
+            # return ref to alpha vector
+            return pos + neg, alpha
+        else:
+            return pos + neg
+
+
+def leakyrelu(x, alpha=0.3, name='lrelu'):
+    return tf.maximum(x, alpha * x, name=name)
+
+
+class ANFCN():
+    def __init__(self, input_dim, batchsize, is_ref=True, do_prelu=False):
+        kwidth = 5  # 31->5
+        skips = []
+        # g_enc_depths = [16, 32, 32, 64, 64, 128, 128, 256, 256, 512, 1024]
+        g_enc_depths = [16, 32, 32, 64, 64, 128]
+        self.input_x = tf.placeholder(
+            tf.float32, [batchsize, input_dim[0], input_dim[1], 1],
+            name="noise_feat")
+        self.input_y = tf.placeholder(
+            tf.float32, [batchsize, input_dim[0], input_dim[1], 1],
+            name="clean_feat")
+        self.is_training = tf.placeholder(tf.bool)
+
+        h_i = self.input_x
+        with tf.variable_scope('Encode'):
+            # Encode-Decode struct to be built is shaped:
+            # enc ~ [1, 16, 32, 32, 64, 64, 128, 128, 256, 256, 512, 1024]
+            # dec ~ [2048, 1024, 512, 512, 256, 256, 128, 128, 64, 64, 32, 1]
+            # FIRST ENCODER
+            alphas = []
+            for layer_idx, layer_depth in enumerate(g_enc_depths):
+                bias_init = None
+                h_i_dwn = downconv(
+                    h_i,
+                    layer_depth,
+                    kwidth=kwidth,
+                    init=tf.truncated_normal_initializer(stddev=0.02),
+                    bias_init=bias_init,
+                    name='enc_{}'.format(layer_idx))
+                if is_ref:
+                    print('Downconv {} -> {}'.format(h_i.get_shape(),
+                                                     h_i_dwn.get_shape()))
+                h_i = h_i_dwn
+                if layer_idx < len(g_enc_depths) - 1:
+                    if is_ref:
+                        print('Adding skip connection downconv '
+                              '{}'.format(layer_idx))
+                    # store skip connection last one is not stored cause it's the code
+                    skips.append(h_i)
+                if do_prelu:
+                    if is_ref:
+                        print('-- Enc: prelu activation --')
+                    h_i = prelu(
+                        h_i, ref=is_ref, name='enc_prelu_{}'.format(layer_idx))
+                    if is_ref:
+                        # split h_i into its components
+                        alpha_i = h_i[1]
+                        h_i = h_i[0]
+                        alphas.append(alpha_i)
+                else:
+                    if is_ref:
+                        print('-- Enc: leakyrelu activation --')
+                    h_i = leakyrelu(h_i)
+
+            # if z_on:
+            #     # random code is fused with intermediate representation
+            #     z = make_z([
+            #         segan.batch_size,
+            #         h_i.get_shape().as_list()[1], segan.g_enc_depths[-1]
+            #     ])
+            #     h_i = tf.concat([z, h_i], 2)
+
+            # SECOND DECODER (reverse order)
+            g_dec_depths = g_enc_depths[:-1][::-1] + [1]
+            if is_ref:
+                print('g_dec_depths: ', g_dec_depths)
+            for layer_idx, layer_depth in enumerate(g_dec_depths):
+                h_i_dim = h_i.get_shape().as_list()
+                # out_shape = [
+                #     h_i_dim[0], h_i_dim[1], h_i_dim[2] * 2, layer_depth
+                # ]
+                if layer_idx < len(g_dec_depths) - 1:
+                    ssha = skips[-(layer_idx + 1)].shape.as_list()
+                else:
+                    ssha = self.input_x.shape.as_list()
+                out_shape = [h_i_dim[0], h_i_dim[1], ssha[2], layer_depth]
+                bias_init = None
+                # deconv
+                if is_ref:
+                    print('-- Transposed deconvolution type --')
+                # if layer_idx in [1]:
+                #     h_i_dcv = deconv(
+                #         h_i,
+                #         out_shape,
+                #         padding="VALID",
+                #         kwidth=kwidth,
+                #         dilation=3,
+                #         init=tf.truncated_normal_initializer(stddev=0.02),
+                #         bias_init=bias_init,
+                #         name='dec_{}'.format(layer_idx))
+                # else:
+                h_i_dcv = deconv(
+                    h_i,
+                    out_shape,
+                    kwidth=kwidth,
+                    dilation=2,
+                    init=tf.truncated_normal_initializer(stddev=0.02),
+                    bias_init=bias_init,
+                    name='dec_{}'.format(layer_idx))
+                if is_ref:
+                    print('Deconv {} -> {}'.format(h_i.get_shape(),
+                                                   h_i_dcv.get_shape()))
+                h_i = h_i_dcv
+                if layer_idx < len(g_dec_depths) - 1:
+                    if do_prelu:
+                        if is_ref:
+                            print('-- Dec: prelu activation --')
+                        h_i = prelu(
+                            h_i,
+                            ref=is_ref,
+                            name='dec_prelu_{}'.format(layer_idx))
+                        if is_ref:
+                            # split h_i into its components
+                            alpha_i = h_i[1]
+                            h_i = h_i[0]
+                            alphas.append(alpha_i)
+                    else:
+                        if is_ref:
+                            print('-- Dec: leakyrelu activation --')
+                        h_i = leakyrelu(h_i)
+                    # fuse skip connection
+                    skip_ = skips[-(layer_idx + 1)]
+                    if is_ref:
+                        print('Fusing skip connection of '
+                              'shape {}'.format(skip_.get_shape()))
+                    h_i = tf.concat([h_i, skip_], 3)
+                else:
+                    if is_ref:
+                        print('-- Dec: tanh activation --')
+                    h_i = tf.tanh(h_i)
+
+            wave = h_i
+            if is_ref and do_prelu:
+                print('Amount of alpha vectors: ', len(alphas))
+            gen_wave_summ = tf.summary.histogram('gen_wave', wave)
+            if is_ref:
+                print('Amount of skip connections: ', len(skips))
+                print('Last wave shape: ', wave.get_shape())
+                print('*************************')
+            generator_built = True
+            # ret feats contains the features refs to be returned
+            ret_feats = [wave]
+            # if z_on:
+            #     ret_feats.append(z)
+            # if is_ref and do_prelu:
+            #     ret_feats += alphas
+
+        with tf.name_scope("loss"):
+            # self.predictions = tf.reshape(self.layers[-1],
+            #                               [-1, input_dim[0], input_dim[1], 1])
+            self.predictions = wave
+            # losses = tf.losses.absolute_difference(self.input_y,
+            #                                       self.predictions)
+            losses = tf.losses.huber_loss(self.input_y, self.predictions)
+            regularization_losses = tf.get_collection(
+                tf.GraphKeys.REGULARIZATION_LOSSES)
+            self.loss = tf.reduce_mean(losses) + sum(regularization_losses)
+
+        # Accuracy
+        with tf.name_scope("accuracy"):
+            correct_predictions = tf.equal(self.predictions, self.input_y)
+            self.accuracy = tf.reduce_mean(
+                tf.cast(correct_predictions, "float"), name="accuracy")
+
+
+def deconv(x,
+           output_shape,
+           padding="SAME",
+           kwidth=5,
+           dilation=2,
+           init=None,
+           uniform=False,
+           bias_init=None,
+           name='deconv1d'):
+    input_shape = x.get_shape()
+    in_channels = input_shape[-1]
+    out_channels = output_shape[-1]
+    assert len(input_shape) >= 4
+    # reshape the tensor to use 2d operators
+    w_init = init
+    if w_init is None:
+        w_init = xavier_initializer(uniform=uniform)
+    with tf.variable_scope(name):
+        # filter shape: [kwidth, output_channels, in_channels]
+        W = tf.get_variable(
+            'W', [kwidth, kwidth, out_channels, in_channels],
+            initializer=w_init)
+        deconv = tf.nn.conv2d_transpose(
+            x,
+            W,
+            output_shape=output_shape,
+            strides=[1, 1, dilation, 1],
+            padding=padding)
+        if bias_init is not None:
+            b = tf.get_variable(
+                'b', [out_channels], initializer=tf.constant_initializer(0.))
+            deconv = tf.reshape(tf.nn.bias_add(deconv, b), deconv.get_shape())
+        else:
+            deconv = tf.reshape(deconv, deconv.get_shape())
+        return deconv
+

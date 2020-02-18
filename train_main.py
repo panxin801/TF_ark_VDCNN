@@ -4,7 +4,7 @@ import tensorflow as tf
 import numpy as np
 import argparse
 from tensorflow.python.client import device_lib
-from model import VDCNN
+from model import VDCNN, ANFCN
 devices = device_lib.list_local_devices()
 
 parser = argparse.ArgumentParser(description="read and train VDCNN")
@@ -27,6 +27,7 @@ feat_size = 43
 batchsize = 256  # 512->10
 num_epochs = 4
 save_freq = 100
+model_type = "ANFCN"
 
 
 def read_and_decode(TFRecord, context_window_size, feat_size):
@@ -95,13 +96,23 @@ def main(_):
             continue
         udevice.append(device)
     sess = tf.Session(config=config)
-    cnn_model = VDCNN(
-        input_dim=[context_window_size, feat_size],
-        batchsize=batchsize,
-        depth=9,
-        downsampling_type=args.downsampling_type,
-        use_he_uniform=use_he_uniform,
-        optional_shortcut=optional_shortcut)
+    if model_type == "ANFCN":
+        cnn_model = ANFCN(
+            input_dim=[context_window_size, feat_size],
+            batchsize=batchsize,
+            is_ref=True,
+            do_prelu=True)
+    elif model_type == "VDCNN":
+        cnn_model = VDCNN(
+            input_dim=[context_window_size, feat_size],
+            batchsize=batchsize,
+            depth=9,
+            downsampling_type=args.downsampling_type,
+            use_he_uniform=use_he_uniform,
+            optional_shortcut=optional_shortcut)
+    else:
+        print("Model type error!!")
+        sys.exit(1)
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     print("2!!!!!!")
@@ -127,7 +138,7 @@ def main(_):
         os.path.join(saver_path, "train"), sess.graph)
     saver = tf.train.Saver()  # local model saver
 
-    #num_iters = 101
+    num_iters = 101
     with sess:
         for i in range(num_iters):
             sliced_feat, sliced_noise_feat = sess.run(
@@ -137,9 +148,8 @@ def main(_):
                 cnn_model.input_y: sliced_feat,
                 cnn_model.is_training: True
             }
-            _, step, loss, accuracy = sess.run(
-                [train_op, global_step, cnn_model.loss, cnn_model.accuracy],
-                feed)
+            _, step, loss = sess.run([train_op, global_step, cnn_model.loss],
+                                     feed)
             train_summary = sess.run(
                 merge_summary,
                 feed_dict={
@@ -147,14 +157,11 @@ def main(_):
                     cnn_model.input_y: sliced_feat,
                     cnn_model.is_training: True
                 })
-            print("step {}/{}, loss {:g}, accuracy {}".format(
-                step, num_iters, loss, accuracy))
+            print("step {}/{}, loss {:g}".format(step, num_iters, loss))
             if i % save_freq == 0 or i == (num_iters - 1):
                 saver.save(
                     sess, os.path.join(saver_path, "saver"), global_step=i)
                 writer.add_summary(train_summary, step)
-                # writer.add_summary(accuracy,step)
-                #
                 # try:
                 #     pass
                 # except tf.errors.OutOfRangeError:
