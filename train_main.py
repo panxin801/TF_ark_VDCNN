@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(description="read and train VDCNN")
 parser.add_argument(
     "--TFRecord",
     type=str,
-    default="output_TFRecord.tfrecords",
+    default="wav_output_TFRecord.tfrecords",
     help="Path and name of TFRecord file.")
 parser.add_argument(
     "--downsampling-type",

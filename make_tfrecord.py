@@ -2,6 +2,7 @@ import os, sys
 import argparse
 import numpy as np
 import shutil
+import scipy.io.wavfile as wavfile
 import tensorflow as tf
 
 
@@ -99,7 +100,8 @@ def ReadARKFile(readFile, noise_list, output_file):
         if "  [" in line and findHead == 0:
             tagid = line.split(" ")[0]
             noise_ARKID = readFile.split(".")[1]
-            noise_feat_spectrogram = findNoiseARK(tagid, noise_ARKID,noise_list)
+            noise_feat_spectrogram = findNoiseARK(tagid, noise_ARKID,
+                                                  noise_list)
             findHead = 1
         elif "]" in line and findHead == 1:
             Tmpline = line.strip().split("]")[0]
@@ -117,32 +119,91 @@ def ReadARKFile(readFile, noise_list, output_file):
             valueList.append(Tmpline.split(" "))
 
 
+def slice_signal(signal, window_size, stride=0.5):
+    """ Return windows of the given signal by sweeping in stride fractions
+        of window
+    """
+    assert signal.ndim == 1, signal.ndim
+    n_samples = signal.shape[0]
+    offset = int(window_size * stride)
+    slices = []
+    for beg_i, end_i in zip(
+            range(0, n_samples, offset),
+            range(window_size, n_samples + offset, offset)):
+        if end_i - beg_i < window_size:
+            break
+        slice_ = signal[beg_i:end_i]
+        if slice_.shape[0] == window_size:
+            slices.append(slice_)
+    return np.array(slices, dtype=np.int32)
+
+
+def read_and_slice(filename, wav_canvas_size, stride=0.5):
+    fm, wav_data = wavfile.read(filename)
+    if fm != 16000:
+        raise ValueError('Sampling rate is expected to be 16kHz!')
+    signals = slice_signal(wav_data, wav_canvas_size, stride)
+    return signals
+
+
+def ReadWAVFile(readFile, noiseFile, output_file, wav_canvas_size):
+    wav_signals = read_and_slice(readFile, wav_canvas_size)
+    noisy_signals = read_and_slice(noiseFile, wav_canvas_size)
+    assert wav_signals.shape == noisy_signals.shape, noisy_signals.shape
+
+    for (wav, noisy) in zip(wav_signals, noisy_signals):
+        wav_raw = wav.tostring()
+        noisy_raw = noisy.tostring()
+        example = tf.train.Example(
+            features=tf.train.Features(
+                feature={
+                    'wav_raw': _bytes_feature(wav_raw),
+                    'noisy_raw': _bytes_feature(noisy_raw)
+                }))
+        output_file.write(example.SerializeToString())
+
+
 def main():
+    # set some path
     currentDir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(currentDir, "data")
     clean_dir = os.path.join(data_dir, "clean")
     noise_dir = os.path.join(data_dir, "noise")
+    read_mode = args.read_mode
+    # set read-mode
+    if read_mode == "wav":
+        endwith = ".wav"
+    elif read_mode == "ark":
+        endwith = ".ark"
+    else:
+        print("Read mode error.")
+        sys.exit(1)
 
+    # start processing
     clean_list = [
         os.path.join(clean_dir, file) for file in os.listdir(clean_dir)
-        if file.endswith(".txt")
+        if file.endswith(endwith)
     ]
     noise_list = [
         os.path.join(noise_dir, file) for file in os.listdir(noise_dir)
-        if file.endswith(".txt")
+        if file.endswith(endwith)
     ]
 
-    outTFRecord = "output_TFRecord.tfrecords"
+    outTFRecord = read_mode + "_output_TFRecord.tfrecords"
     outputPath = os.path.join(data_dir, outTFRecord)
     if os.path.exists(outputPath):
         os.unlink(outputPath)  # Delete $outputPath this file
         raise ValueError(
-            "ERROR: {} already exists. Delete this file or {TODO}.".format(
+            "ERROR: {} already exists. Delete this file or TODO.".format(
                 outputPath))
-    #TODO set some cover or judge or delete mechanism with $outputPath( this file )
+    # TODO set some cover or judge or delete mechanism with $outputPath( this file )
     output_file = tf.python_io.TFRecordWriter(outputPath)
-    for __, clean_ARK_file in enumerate(clean_list):
-        ReadARKFile(clean_ARK_file, noise_list, output_file)
+    if read_mode == "ark":  # set "ark" mode
+        for __, clean_ARK_file in enumerate(clean_list):
+            ReadARKFile(clean_ARK_file, noise_list, output_file)
+    else:  # in this section it shoule onlu be "wav" mode
+        for index, clean_WAV_file in enumerate(clean_list):
+            ReadWAVFile(clean_WAV_file, noise_list[index], output_file, 2**14)
 
     output_file.close()
     print("Done!!")
@@ -151,13 +212,17 @@ def main():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='Convert txt featyre to TFRecord.')
+    # parser.add_argument(
+    #     '--audio-path', default='/home/panxin', help='The audio file.')
     parser.add_argument(
-        '--audio-path', default='/home/panxin', help='The audio file.')
-    parser.add_argument(
-        '--force-gen',
-        dest='force_gen',
-        action='store_true',
-        help='Flag to force overwriting existing dataset.')
+        '--read-mode',
+        default='wav',
+        help='Read .ark file or .wav file as input')
+    # parser.add_argument(
+    #     '--force-gen',
+    #     dest='force_gen',
+    #     action='store_true',
+    #     help='Flag to force overwriting existing dataset.')
     parser.set_defaults(force_gen=True)
     args = parser.parse_args()
     main()
