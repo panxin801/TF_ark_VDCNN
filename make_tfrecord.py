@@ -34,7 +34,7 @@ def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-# FOr slice original wav signals into fixed block like (time,freq)=(11,43),
+# For slice original wav signals into fixed block like (time,freq)=(11,43),
 # and then flatten the input. But if the shape of wav signals less then (time,freq), then padding with 0
 def slice_wav(input_signals, windows_size=11, freq_size=43, stride=1):
     assert input_signals.shape[1] == freq_size
