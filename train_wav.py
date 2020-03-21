@@ -54,13 +54,14 @@ def read_and_decode(TFRecord, canvas_size, preemph):
         parsed_features = tf.parse_single_example(
             example_proto, features=features)
         # Not so sure about what this used for
-        wave = tf.decode_raw(parsed_features["wav_raw"], tf.float32)
+        wave = tf.decode_raw(parsed_features["wav_raw"], tf.int32)
         wave.set_shape(canvas_size)
+        wave = tf.cast(wave, tf.float32)
         # wave = (2. / 65535.) * (wave - 32767) + 1.
-        noisy_feat = tf.decode_raw(parsed_features["noisy_raw"], tf.float32)
+        noisy_feat = tf.decode_raw(parsed_features["noisy_raw"], tf.int32)
         noisy_feat.set_shape(canvas_size)
+        noisy_feat = tf.cast(noisy_feat, tf.float32)
         # noisy_feat = (2. / 65535.) * (noisy_feat - 32767) + 1.
-
         if preemph > 0:
             sliced_wave = tf.cast(pre_emph(wave, preemph), tf.float32)
             sliced_noise_wave = tf.cast(
@@ -162,8 +163,6 @@ def main(_):
         for i in range(num_iters):
             sliced_wave, sliced_noise_wave = sess.run(
                 [sliced_wave_op, sliced_noise_wave_op])
-            print(sliced_noise_wave)
-            print(sliced_wave)
 
             feed = {
                 cnn_model.input_x: sliced_noise_wave,
