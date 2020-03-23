@@ -1,11 +1,24 @@
 # TF_ark_VDCNN
-Using tensorflow and ARK files for VDCNN 
+
+Author: Xin Pan
+
+Date: 2020.03.20
+
+---
+
+This is a self-experiment code repo. Used for speech enhancement  experiment.
+
+Till now, it has two training protocal. One is using ARK files(from kaldi) and the other is using Raw wave files as input. From model archietecture it has two model:
+
+1.  VDCNN-very deep cnn network;
+2. ANFCN-fully cnn model designed as auto encoder-decoder.
 
 ## Dependiences
 This experiment is based on
 1. Python3.5.4 64bit
 2. Tensorflow-cpy version 1.9.0 AMD64 or
    Tensorflow-gpu version 1.12.0 AMD64
+3. Scipy 1.0.0
 
 ## Pre-processing on feats.scp
 Original **feats.scp** stores the id-ark_file relationship. For now, I want to process the data as following steps:  
