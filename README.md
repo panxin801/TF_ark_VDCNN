@@ -20,16 +20,22 @@ This experiment is based on
    Tensorflow-gpu version 1.12.0 AMD64
 3. Scipy 1.0.0
 
-## Pre-processing on feats.scp
-Original **feats.scp** stores the id-ark_file relationship. For now, I want to process the data as following steps:  
-Clean and noise data have same ID in parallel, but save in different dirs. Both of them have the file named feats.scp, I foucs on the feats.scp from noise dir and then do some modifies on it.  
+## How to make TFRecord
+
+This program supports two formation transforming as TFRecord. One is ARK file and the other is raw wave files. We have two Step1, you may choose one from the following two Step1.
+
+### Step1.ARK file
+
+Original **feats.scp** stores the `uttid ark-feats` relationship. For now, I want to process the data as following steps: 
+Clean and Noise data have same IDs in parallel, but save in different dirs or files. Both of them have the file named `feats.scp`, I foucs on the `feats.scp` from noise dir and then do some modifies on it.  
 Using the following code:
-```
+
+```bash
 %s/:.*// # delete the characters after:
-using vi block delete
+and then using vi block delete
 ```
 save as **noise_feats.scp**. After modified, it looks like:
-```
+```tex
 10000441 1
 10000442 1
 10000443 1
@@ -48,8 +54,19 @@ save as **noise_feats.scp**. After modified, it looks like:
 ```
 the second block means which noise ark file can find the feature of ID.  
 
-## How to make TFRecord.
-When open a clean ark file read a ID and open **noise_feats.scp** to find which noise ark file the counterpart stores in, then open the noise ark file get the noise feature. Finally, zip the clean feature and the noise feature, store them in TFRecord file.
+When open a clean ark file read an ID and open `noise_feats.scp` to find counterpart stores in `noise_feats.scp`, then open the noise ark file get the noise feature. Finally, zip the clean feature and the noise feature, store them in TFRecord file.
+
+### Step1.RAW WAVE
+
+In the part, we have two dirs named `clean_dir` and `noise_dir`, and files in both dir have same name is much easier for processing in the next step.
+
+### Step2 Run make_tfrecord.py
+
+This code will make right TFRecord file and save them.
+
+## Train
+
+This part contains two different pipeline either. One is for training ARK file, you can use files named like `*_main` or file don't have suffix. The other is for RAW WAVE formation, it only uses files named like `*_wav`. This is the best difference.
 
 ## Note
 Data made of 2 parts. One is clean ark file and the other is noise ark file. They must be in parallel relationship, which means one clean file have a counterpart noise file with the same name but in different directory.  
@@ -58,3 +75,5 @@ In **wav.scp** they must have the same id, which thet are in different save path
 ## TODO works
 1. how to use tf.Dataset as input pipeline;
 2. How to change tf.layers.conv2d change to tf.nn.max_pool;
+3. rewrite README;
+4. modify the processing routine.
